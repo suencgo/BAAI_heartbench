@@ -54,14 +54,17 @@ class EvaluationResult:
 class BenchmarkDataLoader:
     """Benchmark data loader"""
     
-    def __init__(self, json_path: str, image_base_dir: str = "."):
+    def __init__(self, json_path: str, image_base_dir: str = ".", filter_sequence: str = None):
         """
         Args:
             json_path: Path to JSON file
             image_base_dir: Base directory for images
+            filter_sequence: Filter questions by sequence_view (e.g., "cine" to match all cine sequences)
+                            If None, load all questions
         """
         self.json_path = json_path
         self.image_base_dir = Path(image_base_dir)
+        self.filter_sequence = filter_sequence
         
     def load_questions(self) -> List[Question]:
         """Load all questions"""
@@ -70,6 +73,12 @@ class BenchmarkDataLoader:
         
         questions = []
         for item in data:
+            # Filter by sequence_view if filter_sequence is specified
+            sequence_view = item.get('sequence_view', '')
+            if self.filter_sequence:
+                if self.filter_sequence.lower() not in sequence_view.lower():
+                    continue  # Skip questions that don't match the filter
+            
             # Get question and answer
             question_text = item['conversations'][0]['value']
             ground_truth = item['conversations'][1]['value']
@@ -619,6 +628,8 @@ def main():
     parser.add_argument('--output_format', type=str, default='json',
                        choices=['json', 'tsv', 'both'],
                        help='Output format: json, tsv, or both')
+    parser.add_argument('--filter_sequence', type=str, default=None,
+                       help='Filter questions by sequence_view (e.g., "cine" to test only cine sequences, "LGE" for LGE sequences)')
     
     args = parser.parse_args()
     
@@ -684,7 +695,11 @@ def main():
             judge_model = ModelFactory.create_from_config(judge_model_config)
     
     # Initialize components
-    data_loader = BenchmarkDataLoader(args.json_path, args.image_base_dir)
+    data_loader = BenchmarkDataLoader(
+        args.json_path, 
+        args.image_base_dir,
+        filter_sequence=args.filter_sequence
+    )
     evaluator = BenchmarkEvaluator(
         data_loader, 
         test_model, 

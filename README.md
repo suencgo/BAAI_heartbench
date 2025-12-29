@@ -7,9 +7,11 @@
 1. **多模型支持**：支持GPT、Qwen、Ksyun等不同API模型
 2. **配置管理**：通过配置文件管理模型别名、API密钥等，使用更直观
 3. **智能Prompt**：针对不同序列类型和题目类型自动生成优化的prompt
-4. **灵活评估**：支持规则评估和Judge模型评估两种方式
-5. **详细报告**：生成JSON和TSV格式的详细评估报告，包含答案推理原因
-6. **评估指标**：支持准确率（accuracy）和多选题命中率（hit）指标
+4. **序列过滤**：支持通过 `--filter_sequence` 参数过滤特定序列类型的题目（如只测试cine序列）
+5. **批量测试**：提供 `batch_test_cine.py` 脚本，可自动批量测试所有病人的特定序列
+6. **灵活评估**：支持规则评估和Judge模型评估两种方式
+7. **详细报告**：生成JSON和TSV格式的详细评估报告，包含答案推理原因
+8. **评估指标**：支持准确率（accuracy）和多选题命中率（hit）指标
 
 ## 文件结构
 
@@ -21,6 +23,7 @@ Heart_bench/
 ├── config_manager.py       # 配置管理器
 ├── answer_parser.py        # 答案解析器
 ├── evaluate_benchmark.py   # 主评估脚本
+├── batch_test_cine.py     # 批量测试脚本（用于批量测试所有病人的特定序列）
 ├── example_usage.py        # 使用示例
 ├── example_config.py       # 配置使用示例
 ├── model_config.json       # 模型配置文件
@@ -138,6 +141,71 @@ python evaluate_benchmark.py \
     --output_format both  # json, tsv, 或 both
 ```
 
+### 过滤特定序列类型
+
+使用 `--filter_sequence` 参数可以只测试特定序列类型的题目：
+
+```bash
+# 只测试 cine 序列（cine_sax, cine_4ch, cine_3ch 等）
+python evaluate_benchmark.py \
+    --json_path ../dataset/patient_1322705_vqa_png.json \
+    --image_base_dir ../dataset \
+    --test_model_alias qwen3-vl-235b \
+    --filter_sequence cine
+
+# 只测试 LGE 序列
+python evaluate_benchmark.py \
+    --json_path ../dataset/patient_1322705_vqa_png.json \
+    --image_base_dir ../dataset \
+    --test_model_alias qwen3-vl-235b \
+    --filter_sequence LGE
+
+# 只测试 perfusion 序列
+python evaluate_benchmark.py \
+    --json_path ../dataset/patient_1322705_vqa_png.json \
+    --image_base_dir ../dataset \
+    --test_model_alias qwen3-vl-235b \
+    --filter_sequence perfusion
+
+# 只测试 T2 序列
+python evaluate_benchmark.py \
+    --json_path ../dataset/patient_1322705_vqa_png.json \
+    --image_base_dir ../dataset \
+    --test_model_alias qwen3-vl-235b \
+    --filter_sequence T2
+```
+
+### 批量测试所有病人的特定序列（推荐）
+
+使用 `batch_test_cine.py` 脚本可以自动批量测试所有病人的特定序列：
+
+```bash
+# 批量测试所有病人的 cine 序列
+cd Heart_bench
+python batch_test_cine.py --model_alias qwen3-vl-235b --filter_sequence cine
+
+# 批量测试所有病人的 LGE 序列
+python batch_test_cine.py --model_alias qwen3-vl-235b --filter_sequence LGE
+
+# 批量测试所有病人的 perfusion 序列
+python batch_test_cine.py --model_alias qwen3-vl-235b --filter_sequence perfusion
+
+# 批量测试所有病人的 T2 序列
+python batch_test_cine.py --model_alias qwen3-vl-235b --filter_sequence T2
+
+# 使用不同的模型
+python batch_test_cine.py --model_alias gpt-4o --filter_sequence cine
+
+# 从指定索引开始（用于断点续传）
+python batch_test_cine.py --model_alias qwen3-vl-235b --filter_sequence cine --start_from 2
+```
+
+批量测试脚本会自动：
+- 查找所有 `patient_*_vqa_png.json` 文件
+- 对每个病人只测试指定序列类型的题目
+- 将结果保存到 `output/{model_alias}/{patient_id}/` 目录
+- 显示进度条和测试摘要
+
 ## 参数说明
 
 ### 必需参数
@@ -149,6 +217,7 @@ python evaluate_benchmark.py \
 - `--output_format`: 输出格式，可选 `json`、`tsv` 或 `both`（默认：json）
 - `--config_path`: 配置文件路径（默认：`Heart_bench/model_config.json`）
 - `--include_reason`: 是否要求模型输出推理原因（默认：True）
+- `--filter_sequence`: 过滤特定序列类型（如 `cine`、`LGE`、`perfusion`、`T2`），只测试匹配的题目
 
 ### 模型配置参数（二选一）
 
@@ -232,10 +301,11 @@ test_model = ModelFactory.create_model(
     config_manager=config_manager
 )
 
-# 加载数据
+# 加载数据（可以指定 filter_sequence 参数过滤特定序列）
 data_loader = BenchmarkDataLoader(
-    json_path='../1322705/patient_1322705_vqa_png.json',
-    image_base_dir='../1322705'
+    json_path='../dataset/patient_1322705_vqa_png.json',
+    image_base_dir='../dataset',
+    filter_sequence='cine'  # 只加载 cine 序列的题目
 )
 
 # 创建评估器
@@ -321,6 +391,8 @@ result = evaluator.evaluate()
 4. **Judge模型**：使用Judge模型会增加API调用成本，但评估更准确
 5. **输出目录**：如果不指定`--output_dir`，结果会自动保存到`Heart_bench/output/{model_name}/`目录
 6. **API密钥安全**：不要在配置文件中提交真实的API密钥，建议使用环境变量或`.gitignore`忽略配置文件
+7. **序列过滤**：使用 `--filter_sequence` 参数时，过滤是基于 `sequence_view` 字段的字符串匹配（不区分大小写），例如 `cine` 会匹配 `cine_sax`、`cine_4ch`、`cine_3ch` 等
+8. **批量测试**：批量测试脚本会自动查找所有 `patient_*_vqa_png.json` 文件，确保数据文件命名符合规范
 
 ## 更多信息
 
