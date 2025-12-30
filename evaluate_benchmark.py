@@ -250,8 +250,8 @@ class AnswerEvaluator:
         if is_multiple_choice:
             return AnswerEvaluator.evaluate_multiple_choice(predicted, ground_truth)
         else:
-            is_correct = AnswerEvaluator.evaluate_single_choice(predicted, ground_truth)
-            return is_correct, {'accuracy': 1.0 if is_correct else 0.0}
+            is_correct, metrics = AnswerEvaluator.evaluate_single_choice(predicted, ground_truth)
+            return is_correct, metrics
 
 # ==================== Main Evaluator Class ====================
 class BenchmarkEvaluator:
@@ -262,7 +262,9 @@ class BenchmarkEvaluator:
                  test_model: BaseModelAPI,
                  judge_model: Optional[BaseModelAPI] = None,
                  use_judge: bool = False,
-                 include_reason: bool = True):
+                 include_reason: bool = True,
+                 output_dir: Optional[str] = None,
+                 resume: bool = False):
         """
         Args:
             data_loader: Data loader
@@ -270,6 +272,8 @@ class BenchmarkEvaluator:
             judge_model: Judge model (for evaluating answers, optional)
             use_judge: Whether to use judge model for evaluation
             include_reason: Whether to require model to output reasoning
+            output_dir: Output directory for incremental saving
+            resume: Whether to resume from existing results
         """
         self.data_loader = data_loader
         self.test_model = test_model
@@ -279,7 +283,127 @@ class BenchmarkEvaluator:
         self.answer_extractor = AnswerExtractor()
         self.evaluator = AnswerEvaluator()
         self.answer_parser = AnswerParser()
+        self.output_dir = Path(output_dir) if output_dir else None
+        self.resume = resume
+        self.completed_qids = set()  # Track completed question IDs
         
+    def _load_existing_results(self) -> Dict[str, Dict]:
+        """Load existing results for resume functionality"""
+        if not self.output_dir or not self.resume:
+            return {}
+        
+        detailed_file = self.output_dir / "detailed_results.json"
+        if not detailed_file.exists():
+            return {}
+        
+        try:
+            with open(detailed_file, 'r', encoding='utf-8') as f:
+                existing_results = json.load(f)
+            # Create a dictionary indexed by qid
+            results_dict = {item['qid']: item for item in existing_results}
+            print(f"[Resume] Loaded {len(results_dict)} existing results from {detailed_file}")
+            return results_dict
+        except Exception as e:
+            print(f"[Resume] Warning: Failed to load existing results: {e}")
+            return {}
+    
+    def _save_single_result(self, result_item: Dict, all_results: List[Dict]):
+        """Save a single result incrementally"""
+        if not self.output_dir:
+            return
+        
+        # Check if this result already exists (for resume mode)
+        existing_idx = None
+        for i, existing_item in enumerate(all_results):
+            if existing_item.get('qid') == result_item['qid']:
+                existing_idx = i
+                break
+        
+        if existing_idx is not None:
+            # Update existing result
+            all_results[existing_idx] = result_item
+        else:
+            # Add new result
+            all_results.append(result_item)
+        
+        # Save detailed results
+        detailed_file = self.output_dir / "detailed_results.json"
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        with open(detailed_file, 'w', encoding='utf-8') as f:
+            json.dump(all_results, f, ensure_ascii=False, indent=2)
+        
+        print(f"[Save] Saved result for QID: {result_item['qid']}")
+    
+    def _update_summary(self, all_results: List[Dict]):
+        """Update summary statistics from all results"""
+        if not self.output_dir:
+            return
+        
+        # Recalculate statistics
+        total = len(all_results)
+        correct = sum(1 for r in all_results if r.get('is_correct', False))
+        accuracy = correct / total if total > 0 else 0.0
+        
+        per_field = defaultdict(lambda: {'total': 0, 'correct': 0, 'hit': 0})
+        per_sequence_view = defaultdict(lambda: {'total': 0, 'correct': 0, 'hit': 0})
+        per_question_type = defaultdict(lambda: {'total': 0, 'correct': 0, 'hit': 0})
+        
+        for result in all_results:
+            field = result.get('field', '')
+            seq_view = result.get('sequence_view', '')
+            q_type = result.get('question_type', '')
+            is_correct = result.get('is_correct', False)
+            is_multiple = result.get('question_type') == 'Multiple Choice'
+            
+            per_field[field]['total'] += 1
+            per_field[field]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_field[field]['hit'] += result.get('hit', 0.0)
+            
+            per_sequence_view[seq_view]['total'] += 1
+            per_sequence_view[seq_view]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_sequence_view[seq_view]['hit'] += result.get('hit', 0.0)
+            
+            per_question_type[q_type]['total'] += 1
+            per_question_type[q_type]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_question_type[q_type]['hit'] += result.get('hit', 0.0)
+        
+        # Calculate averages
+        for key in per_field:
+            if per_field[key]['total'] > 0:
+                per_field[key]['accuracy'] = per_field[key]['correct'] / per_field[key]['total']
+                if 'hit' in per_field[key]:
+                    per_field[key]['hit'] /= per_field[key]['total']
+        
+        for key in per_sequence_view:
+            if per_sequence_view[key]['total'] > 0:
+                per_sequence_view[key]['accuracy'] = per_sequence_view[key]['correct'] / per_sequence_view[key]['total']
+                if 'hit' in per_sequence_view[key]:
+                    per_sequence_view[key]['hit'] /= per_sequence_view[key]['total']
+        
+        for key in per_question_type:
+            if per_question_type[key]['total'] > 0:
+                per_question_type[key]['accuracy'] = per_question_type[key]['correct'] / per_question_type[key]['total']
+                if 'hit' in per_question_type[key]:
+                    per_question_type[key]['hit'] /= per_question_type[key]['total']
+        
+        summary = {
+            'overall': {
+                'total': total,
+                'correct': correct,
+                'accuracy': accuracy
+            },
+            'per_field': dict(per_field),
+            'per_sequence_view': dict(per_sequence_view),
+            'per_question_type': dict(per_question_type)
+        }
+        
+        summary_file = self.output_dir / "summary.json"
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+    
     def evaluate(self, questions: Optional[List[Question]] = None) -> EvaluationResult:
         """
         Execute evaluation
@@ -293,16 +417,86 @@ class BenchmarkEvaluator:
         if questions is None:
             questions = self.data_loader.load_questions()
         
+        # Load existing results if resuming
+        existing_results = {}
+        all_results = []
+        if self.resume and self.output_dir:
+            existing_results = self._load_existing_results()
+            all_results = list(existing_results.values())
+            self.completed_qids = set(existing_results.keys())
+            print(f"[Resume] Found {len(self.completed_qids)} completed questions, will skip them")
+        
         # Statistics containers
         total = len(questions)
-        correct = 0
+        # Fix: Handle legacy format when counting correct
+        def _get_is_correct(result):
+            is_correct_raw = result.get('is_correct', False)
+            if isinstance(is_correct_raw, list) and len(is_correct_raw) > 0:
+                return bool(is_correct_raw[0])
+            elif isinstance(is_correct_raw, tuple):
+                return bool(is_correct_raw[0])
+            else:
+                return bool(is_correct_raw)
+        correct = sum(1 for r in all_results if _get_is_correct(r))
         per_field = defaultdict(lambda: {'total': 0, 'correct': 0, 'hit': 0})
         per_sequence_view = defaultdict(lambda: {'total': 0, 'correct': 0, 'hit': 0})
         per_question_type = defaultdict(lambda: {'total': 0, 'correct': 0, 'hit': 0})
-        detailed_results = []
+        detailed_results = []  # Initialize detailed_results list
+        
+        # Initialize statistics from existing results
+        for result in all_results:
+            field = result.get('field', '')
+            seq_view = result.get('sequence_view', '')
+            q_type = result.get('question_type', '')
+            
+            # Fix: Handle legacy format where is_correct might be a list [bool, dict]
+            is_correct_raw = result.get('is_correct', False)
+            if isinstance(is_correct_raw, list) and len(is_correct_raw) > 0:
+                # Legacy format: [bool, {accuracy: ...}]
+                is_correct = is_correct_raw[0] if isinstance(is_correct_raw[0], bool) else False
+                # Also fix the accuracy if it's wrong
+                if len(is_correct_raw) > 1 and isinstance(is_correct_raw[1], dict):
+                    result['accuracy'] = is_correct_raw[1].get('accuracy', 0.0)
+                result['is_correct'] = is_correct  # Fix the format
+            elif isinstance(is_correct_raw, tuple):
+                # Handle tuple format (shouldn't happen in JSON, but just in case)
+                is_correct = is_correct_raw[0] if isinstance(is_correct_raw[0], bool) else False
+                result['is_correct'] = is_correct
+            else:
+                is_correct = bool(is_correct_raw)
+            
+            # Fix accuracy if it's inconsistent with is_correct
+            accuracy = result.get('accuracy', 0.0)
+            if is_correct and accuracy == 0.0:
+                # If marked as correct but accuracy is 0, fix it
+                result['accuracy'] = 1.0
+            elif not is_correct and accuracy == 1.0:
+                # If marked as incorrect but accuracy is 1, fix it
+                result['accuracy'] = 0.0
+            
+            is_multiple = result.get('question_type') == 'Multiple Choice'
+            
+            per_field[field]['total'] += 1
+            per_field[field]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_field[field]['hit'] += result.get('hit', 0.0)
+            
+            per_sequence_view[seq_view]['total'] += 1
+            per_sequence_view[seq_view]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_sequence_view[seq_view]['hit'] += result.get('hit', 0.0)
+            
+            per_question_type[q_type]['total'] += 1
+            per_question_type[q_type]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_question_type[q_type]['hit'] += result.get('hit', 0.0)
         
         # Iterate through all questions
         for question in tqdm(questions, desc="Evaluating"):
+            # Skip if already completed and resuming
+            if question.qid in self.completed_qids:
+                print(f"[Resume] Skipping already completed QID: {question.qid}")
+                continue
             # Generate test model prompt
             test_prompt = TestModelPromptGenerator.generate(
                 sequence_view=question.sequence_view,
@@ -313,19 +507,54 @@ class BenchmarkEvaluator:
                 include_reason=self.include_reason
             )
             
+            # Debug: print prompt to check if reason is required
+            if self.include_reason:
+                print(f"[Prompt Check] include_reason=True, checking if prompt requires reason...")
+                if "Reason:" in test_prompt or "reason:" in test_prompt.lower():
+                    print(f"[Prompt Check] ✓ Prompt contains 'Reason:' requirement")
+                else:
+                    print(f"[Prompt Check] ✗ WARNING: Prompt does NOT contain 'Reason:' requirement!")
+                    print(f"[Prompt Check] Prompt preview (last 200 chars): {test_prompt[-200:]}")
+            
             # Model prediction
+            print(f"\n{'='*80}")
+            print(f"Processing QID: {question.qid}")
+            print(f"Field: {question.field}, Sequence: {question.sequence_view}")
+            print(f"Question Type: {question.question_type}, Multiple Choice: {question.is_multiple_choice}")
+            print(f"Number of images: {len(question.images)}")
+            print(f"Images: {[Path(img).name for img in question.images[:3]]}{'...' if len(question.images) > 3 else ''}")
+            print(f"Prompt length: {len(test_prompt)} characters")
+            print(f"{'='*80}")
+            
             try:
+                print(f"[API Call] Calling model.predict() for {question.qid}...")
                 raw_output = self.test_model.predict(question.images, test_prompt)
+                print(f"[API Response] Received response (length: {len(raw_output) if raw_output else 0} chars)")
+                if raw_output:
+                    print(f"[API Response] First 200 chars: {raw_output[:200]}...")
+                else:
+                    print(f"[API Response] WARNING: Empty response received!")
             except Exception as e:
-                print(f"Error predicting for {question.qid}: {e}")
+                print(f"[ERROR] Exception during API call for {question.qid}: {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
                 raw_output = ""
                 answer_text = ""
                 reason = ""
             else:
                 # Parse answer and reasoning
+                print(f"[Parsing] Parsing answer from response...")
+                print(f"[Parsing] Raw output (first 500 chars): {raw_output[:500]}")
+                print(f"[Parsing] Raw output length: {len(raw_output)}")
                 answer_text, reason = self.answer_parser.parse_answer_with_reason(raw_output)
+                print(f"[Parsing] Extracted answer: '{answer_text}', reason length: {len(reason)}")
+                if not reason:
+                    print(f"[Parsing] WARNING: No reason extracted from output!")
+                    print(f"[Parsing] Raw output content: {repr(raw_output)}")
+                    print(f"[Parsing] Checking if 'Reason:' or 'reason:' exists in output: {'Reason:' in raw_output or 'reason:' in raw_output}")
                 # If parsing fails, use raw output
                 if not answer_text:
+                    print(f"[Parsing] WARNING: Failed to extract answer, using raw output")
                     answer_text = raw_output
             
             # Evaluate answer
@@ -366,10 +595,26 @@ class BenchmarkEvaluator:
                 # Use rule-based evaluation
                 predicted_answers = self.answer_extractor.extract_answers(answer_text, question.is_multiple_choice)
                 gt_answers = self.answer_extractor.parse_ground_truth(question.ground_truth)
+                
+                # Debug: print extraction results
+                print(f"[Evaluation] QID: {question.qid}")
+                print(f"[Evaluation] Answer text: '{answer_text}'")
+                print(f"[Evaluation] Extracted predicted answers: {predicted_answers}")
+                print(f"[Evaluation] Extracted ground truth: {gt_answers}")
+                
                 is_correct, metrics = self.evaluator.evaluate(predicted_answers, gt_answers, question.is_multiple_choice)
+                
+                print(f"[Evaluation] Is correct: {is_correct}, Metrics: {metrics}")
             
-            if is_correct:
+            # Only count as correct if answer_text is not empty
+            if is_correct and answer_text and answer_text.strip():
                 correct += 1
+            elif is_correct and (not answer_text or not answer_text.strip()):
+                print(f"[Evaluation WARNING] QID {question.qid} marked as correct but answer is empty! Setting to incorrect.")
+                is_correct = False
+                metrics['accuracy'] = 0.0
+                if question.is_multiple_choice:
+                    metrics['hit'] = 0.0
             
             # Statistics
             per_field[question.field]['total'] += 1
@@ -388,6 +633,13 @@ class BenchmarkEvaluator:
                 per_question_type[question.question_type]['hit'] += metrics.get('hit', 0.0)
             
             # Detailed results (according to user requirements)
+            # Ensure accuracy is consistent with is_correct
+            accuracy = metrics.get('accuracy', 1.0 if is_correct else 0.0)
+            if is_correct and accuracy != 1.0:
+                accuracy = 1.0
+            elif not is_correct and accuracy != 0.0:
+                accuracy = 0.0
+            
             result_item = {
                 'qid': question.qid,
                 'field': question.field,
@@ -399,7 +651,7 @@ class BenchmarkEvaluator:
                 'answer': answer_text,  # answer in separate line
                 'reason': reason,  # reasoning
                 'is_correct': is_correct,
-                'accuracy': metrics.get('accuracy', 1.0 if is_correct else 0.0),
+                'accuracy': accuracy,  # Ensure consistency with is_correct
                 'raw_output': raw_output  # Keep raw output for debugging
             }
             
@@ -407,7 +659,30 @@ class BenchmarkEvaluator:
             if question.is_multiple_choice:
                 result_item['hit'] = metrics.get('hit', 0.0)
             
+            # Add to both detailed_results (for return) and all_results (for incremental save)
             detailed_results.append(result_item)
+            
+            # Incremental save: save each result immediately
+            if self.output_dir:
+                self._save_single_result(result_item, all_results)
+                self._update_summary(all_results)
+                self.completed_qids.add(question.qid)
+        
+        # Merge all_results with detailed_results (in case of resume)
+        # Use all_results as the source of truth since it includes existing results
+        if self.resume and self.output_dir:
+            # Create a map of new results by qid
+            new_results_map = {item['qid']: item for item in detailed_results}
+            # Update all_results with new results
+            for i, existing_item in enumerate(all_results):
+                if existing_item['qid'] in new_results_map:
+                    all_results[i] = new_results_map[existing_item['qid']]
+            # Add any completely new results
+            for new_item in detailed_results:
+                if new_item['qid'] not in {item['qid'] for item in all_results}:
+                    all_results.append(new_item)
+            # Use all_results as the final detailed_results
+            detailed_results = all_results
         
         # Calculate average metrics
         for key in per_field:
@@ -630,6 +905,8 @@ def main():
                        help='Output format: json, tsv, or both')
     parser.add_argument('--filter_sequence', type=str, default=None,
                        help='Filter questions by sequence_view (e.g., "cine" to test only cine sequences, "LGE" for LGE sequences)')
+    parser.add_argument('--resume', action='store_true',
+                       help='Resume evaluation from existing results (skip already completed questions)')
     
     args = parser.parse_args()
     
@@ -720,6 +997,15 @@ def main():
         output_dir = Path(args.output_dir)
     
     print(f"Output directory: {output_dir}")
+    if args.resume:
+        print("Resume mode: Will skip already completed questions")
+    
+    # Create output directory
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Update evaluator with output_dir and resume flag
+    evaluator.output_dir = Path(output_dir)
+    evaluator.resume = args.resume
     
     # Execute evaluation
     print("Starting evaluation...")

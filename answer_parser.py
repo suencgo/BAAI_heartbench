@@ -52,15 +52,21 @@ class AnswerParser:
             
             # 尝试提取reason（在答案之后的内容）
             # 查找"Reason:"关键词
-            reason_match = re.search(r'Reason:\s*(.+?)(?:\n\n|\Z)', output, re.IGNORECASE | re.DOTALL)
+            reason_match = re.search(r'Reason:\s*(.+?)(?:\n\n|\Z)', output, re.IGNORECASE | re.MULTILINE | re.DOTALL)
             if reason_match:
                 reason = reason_match.group(1).strip()
             else:
-                # 如果没有找到Reason:，尝试提取答案之后的所有文本作为reason
-                # 移除答案部分
-                answer_removed = re.sub(r'\b([A-Z])\.?\s*[^\s]*(?:\s+[A-Z]\.?\s*[^\s]*)*', '', output)
-                answer_removed = re.sub(r'Answer:.*', '', answer_removed, flags=re.IGNORECASE)
-                reason = answer_removed.strip()
+                # 如果没有找到Reason:，检查是否只有单个字母（可能是模型只输出了答案，没有reason）
+                # 如果输出只有单个字母或很短的文本，可能模型没有输出reason
+                if len(output.strip()) <= 5 and output.strip().upper() in ['A', 'B', 'C', 'D', 'E', 'A,B', 'B,C', 'A,B,C', 'A,B,C,D', 'A,B,C,D,E']:
+                    # 模型可能只输出了答案，没有reason
+                    reason = ""
+                else:
+                    # 尝试提取答案之后的所有文本作为reason
+                    # 移除答案部分
+                    answer_removed = re.sub(r'\b([A-Z])\.?\s*[^\s]*(?:\s+[A-Z]\.?\s*[^\s]*)*', '', output)
+                    answer_removed = re.sub(r'Answer:.*', '', answer_removed, flags=re.IGNORECASE)
+                    reason = answer_removed.strip()
             
             return answer, reason
         

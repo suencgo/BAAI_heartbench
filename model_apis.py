@@ -71,7 +71,7 @@ class GPTModelAPI(BaseModelAPI):
                  api_key: str = None,
                  model: str = "gpt-4o",
                  base_url: str = None,
-                 max_tokens: int = 500,
+                 max_tokens: int = None,
                  temperature: float = 0.0):
         """
         Args:
@@ -154,12 +154,17 @@ class GPTModelAPI(BaseModelAPI):
         
         # Call API
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                max_tokens=kwargs.get('max_tokens', self.max_tokens),
-                temperature=kwargs.get('temperature', self.temperature)
-            )
+            api_params = {
+                'model': self.model,
+                'messages': messages,
+                'temperature': kwargs.get('temperature', self.temperature)
+            }
+            # Only add max_tokens if explicitly provided
+            max_tokens_value = kwargs.get('max_tokens', self.max_tokens)
+            if max_tokens_value is not None:
+                api_params['max_tokens'] = max_tokens_value
+            
+            response = self.client.chat.completions.create(**api_params)
             
             return response.choices[0].message.content.strip()
         
@@ -175,7 +180,7 @@ class KsyunModelAPI(BaseModelAPI):
                  api_key: str = None,
                  model: str = "qwen3-vl-235b-a22b-thinking",
                  base_url: str = "https://kspmas.ksyun.com/v1/",
-                 max_tokens: int = 500,
+                 max_tokens: int = None,
                  temperature: float = 0.0):
         """
         Args:
@@ -190,11 +195,24 @@ class KsyunModelAPI(BaseModelAPI):
         self.max_tokens = max_tokens
         self.temperature = temperature
         
+        # Check if API key is provided
+        if not self.api_key or not self.api_key.strip():
+            raise ValueError(
+                "Ksyun API key is required. Please set it in model_config.json or "
+                "provide it via --test_api_key argument or KSYUN_API_KEY environment variable."
+            )
+        
         # Initialize OpenAI client (using Ksyun base_url)
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
+        try:
+            self.client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url
+            )
+        except Exception as e:
+            raise ValueError(
+                f"Failed to initialize Ksyun API client: {e}. "
+                f"Please check your API key and base_url configuration."
+            ) from e
     
     def predict(self,
                images: List[str],
@@ -289,31 +307,92 @@ class KsyunModelAPI(BaseModelAPI):
         
         # Call API
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                max_tokens=kwargs.get('max_tokens', self.max_tokens),
-                temperature=kwargs.get('temperature', self.temperature)
-            )
+            print(f"[Ksyun API] Preparing API call...")
+            print(f"[Ksyun API] Model: {self.model}")
+            print(f"[Ksyun API] Base URL: {self.base_url}")
+            print(f"[Ksyun API] Number of messages: {len(messages)}")
+            print(f"[Ksyun API] Number of images: {len([c for c in user_content if c.get('type') == 'image_url'])}")
+            print(f"[Ksyun API] Temperature: {kwargs.get('temperature', self.temperature)}")
             
-            return response.choices[0].message.content.strip()
+            # Prepare API call parameters (no max_tokens limit)
+            api_params = {
+                'model': self.model,
+                'messages': messages,
+                'temperature': kwargs.get('temperature', self.temperature)
+            }
+            # Only add max_tokens if explicitly provided in kwargs
+            if 'max_tokens' in kwargs and kwargs['max_tokens'] is not None:
+                api_params['max_tokens'] = kwargs['max_tokens']
+                print(f"[Ksyun API] Max tokens: {kwargs['max_tokens']}")
+            else:
+                print(f"[Ksyun API] Max tokens: None (unlimited)")
+            
+            response = self.client.chat.completions.create(**api_params)
+            
+            print(f"[Ksyun API] API call successful")
+            print(f"[Ksyun API] Response object type: {type(response)}")
+            if hasattr(response, 'choices') and len(response.choices) > 0:
+                choice = response.choices[0]
+                print(f"[Ksyun API] Choice object: {choice}")
+                print(f"[Ksyun API] Finish reason: {getattr(choice, 'finish_reason', 'N/A')}")
+                
+                message = choice.message
+                print(f"[Ksyun API] Message object: {message}")
+                print(f"[Ksyun API] Message type: {type(message)}")
+                print(f"[Ksyun API] Message attributes: {[attr for attr in dir(message) if not attr.startswith('_')]}")
+                
+                content = message.content
+                print(f"[Ksyun API] Content type: {type(content)}")
+                print(f"[Ksyun API] Content value: {repr(content)}")
+                print(f"[Ksyun API] Response content length: {len(content) if content else 0}")
+                
+                # Check for other fields that might contain content
+                if hasattr(message, 'role'):
+                    print(f"[Ksyun API] Message role: {message.role}")
+                
+                # Check full response object
+                print(f"[Ksyun API] Response ID: {getattr(response, 'id', 'N/A')}")
+                print(f"[Ksyun API] Response model: {getattr(response, 'model', 'N/A')}")
+                print(f"[Ksyun API] Response usage: {getattr(response, 'usage', 'N/A')}")
+                
+                if content:
+                    print(f"[Ksyun API] Response preview: {content[:200]}...")
+                    return content.strip()
+                else:
+                    print(f"[Ksyun API] WARNING: Response content is empty!")
+                    print(f"[Ksyun API] Attempting to get content from message dict...")
+                    # Try to get from dict form
+                    if isinstance(message, dict):
+                        content = message.get('content', '')
+                    elif hasattr(message, '__dict__'):
+                        print(f"[Ksyun API] Message __dict__: {message.__dict__}")
+                        content = message.__dict__.get('content', '')
+                    return content.strip() if content else ""
+            else:
+                print(f"[Ksyun API] WARNING: No choices in response!")
+                print(f"[Ksyun API] Response structure: {[attr for attr in dir(response) if not attr.startswith('_')]}")
+                if hasattr(response, 'choices'):
+                    print(f"[Ksyun API] Choices length: {len(response.choices)}")
+                return ""
         
         except Exception as e:
-            print(f"Error calling Ksyun API: {e}")
-            print(f"  Model: {self.model}")
-            print(f"  Base URL: {self.base_url}")
-            print(f"  Messages structure: {len(messages)} message(s)")
+            print(f"[Ksyun API ERROR] Exception type: {type(e).__name__}")
+            print(f"[Ksyun API ERROR] Error message: {e}")
+            print(f"[Ksyun API ERROR] Model: {self.model}")
+            print(f"[Ksyun API ERROR] Base URL: {self.base_url}")
+            print(f"[Ksyun API ERROR] Messages structure: {len(messages)} message(s)")
             if messages:
-                print(f"  First message role: {messages[0].get('role', 'N/A')}")
+                print(f"[Ksyun API ERROR] First message role: {messages[0].get('role', 'N/A')}")
                 if 'content' in messages[0]:
                     content = messages[0]['content']
                     if isinstance(content, list):
-                        print(f"  First message content: {len(content)} items")
+                        print(f"[Ksyun API ERROR] First message content: {len(content)} items")
                         for i, item in enumerate(content[:3]):
                             if isinstance(item, dict):
                                 if 'type' in item:
-                                    print(f"    Item {i}: type={item['type']}")
+                                    print(f"[Ksyun API ERROR]   Item {i}: type={item['type']}")
             import traceback
+            print(f"[Ksyun API ERROR] Full traceback:")
             traceback.print_exc()
             return f"Error: {str(e)}"
 
@@ -324,7 +403,7 @@ class QwenModelAPI(BaseModelAPI):
     def __init__(self,
                  api_key: str = None,
                  model: str = "qwen-vl-max",
-                 max_tokens: int = 500,
+                 max_tokens: int = None,
                  temperature: float = 0.0):
         """
         Args:
@@ -392,12 +471,17 @@ class QwenModelAPI(BaseModelAPI):
         
         # Call API
         try:
-            response = MultiModalConversation.call(
-                model=self.model,
-                messages=messages,
-                max_tokens=kwargs.get('max_tokens', self.max_tokens),
-                temperature=kwargs.get('temperature', self.temperature)
-            )
+            api_params = {
+                'model': self.model,
+                'messages': messages,
+                'temperature': kwargs.get('temperature', self.temperature)
+            }
+            # Only add max_tokens if explicitly provided
+            max_tokens_value = kwargs.get('max_tokens', self.max_tokens)
+            if max_tokens_value is not None:
+                api_params['max_tokens'] = max_tokens_value
+            
+            response = MultiModalConversation.call(**api_params)
             
             if response.status_code == 200:
                 # Extract text content
@@ -448,6 +532,7 @@ class ModelFactory:
             Model API instance
         """
         # If model_alias is provided, read from config
+        actual_model_type = None
         if model_alias:
             try:
                 try:
@@ -472,7 +557,12 @@ class ModelFactory:
                 )
             except Exception as e:
                 print(f"Warning: Failed to load model config for '{model_alias}': {e}")
-                print("Falling back to direct model_type specification")
+                if actual_model_type:
+                    # If we got the model type before failure, use it for fallback
+                    print(f"Falling back to model_type '{actual_model_type}' with provided kwargs")
+                    model_type = actual_model_type
+                else:
+                    print("Falling back to direct model_type specification")
         
         # If model_alias not provided or loading failed, use model_type
         if model_type is None:

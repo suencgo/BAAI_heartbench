@@ -320,6 +320,109 @@ A. Yes (effusion present)
 B. No (effusion absent)""",
 }
 
+# ==================== Reason Analysis Templates ====================
+REASON_TEMPLATES = {
+    # Thickening (LV Wall Thickness)
+    ("Thickening", "cine_sax", True): """Your reason should include:
+1. **Wall thickness assessment**: Describe the overall thickness of the LV myocardium across different segments (anterior, inferior, septal, lateral)
+2. **Uniformity analysis**: Note whether thickness is uniform or heterogeneous across segments
+3. **Specific observations**: Identify any segments showing thinning, thickening, or bulging
+4. **Frame-by-frame consistency**: Describe if thickness characteristics remain consistent across cardiac cycle frames
+5. **Comparison to normal**: Compare observed thickness patterns to what would be expected in normal myocardium
+
+Example structure: "The LV myocardium shows [uniform/heterogeneous] thickness. [Specific segment observations]. [Comparison across frames]. This pattern indicates [normal/thinned/thickened/bulging] characteristics." """,
+
+    # Wall Motion Amplitude
+    ("Wall Motion Amplitude", "cine_4ch", True): """Your reason should include:
+1. **Motion magnitude**: Quantify the degree of inward wall motion during systole (normal, reduced, or absent)
+2. **Cavity size change**: Describe the change in LV cavity size from diastole to systole
+3. **Wall thickening**: Note whether there is appropriate wall thickening during systole
+4. **Frame comparison**: Compare end-diastolic and end-systolic frames to assess motion amplitude
+5. **Regional differences**: If applicable, note any regional variations in motion amplitude
+
+Example structure: "During systole, the LV walls show [extent] inward motion with [degree] reduction in cavity size. Wall thickening is [present/absent]. The motion amplitude is [normal/reduced/absent]." """,
+
+    # Wall Motion Coordination
+    ("Wall Motion Coordination", "cine_4ch", False): """Your reason should include:
+1. **Synchrony assessment**: Evaluate whether all LV wall segments move together in a coordinated manner
+2. **Regional analysis**: Examine each segment (septal, lateral, anterior, inferior) for synchronous motion
+3. **Timing comparison**: Compare the timing of contraction across different segments
+4. **Dyssynchrony signs**: Identify any segments that contract out of phase or show delayed motion
+5. **Overall pattern**: Describe the overall coordination pattern (coordinated vs. uncoordinated)
+
+Example structure: "The LV wall segments show [coordinated/uncoordinated] motion. [Specific segment observations]. [Timing analysis]. This indicates [coordinated/uncoordinated] wall motion." """,
+
+    # Systolic Function
+    ("Systolic Function", "cine_4ch", False): """Your reason should include:
+1. **Cavity size reduction**: Measure and describe the reduction in LV cavity size from diastole to systole
+2. **Wall thickening**: Assess the degree of wall thickening during systole
+3. **Ejection pattern**: Describe how the cavity changes shape and size (normal ejection vs. cavity obliteration)
+4. **Overall function**: Assess whether the contraction appears adequate for normal cardiac function
+5. **Comparison frames**: Compare end-diastolic and end-systolic frames quantitatively
+
+Example structure: "The LV cavity shows [extent] reduction in size during systole with [degree] wall thickening. The ejection pattern is [normal/cavity-obliterating]. Overall systolic function appears [normal/reduced]." """,
+
+    # Mitral Regurgitation
+    ("Mitral Regurgitation", "cine_4ch", False): """Your reason should include:
+1. **Systolic phase analysis**: Focus on ventricular systole when mitral regurgitation would be visible
+2. **Signal void detection**: Look for dark/turbulent signal voids (flow jets) extending from the mitral valve into the left atrium
+3. **Atrial cavity assessment**: Examine the left atrium for abnormal signal patterns during systole
+4. **Valve coaptation**: Assess whether the mitral valve appears to close properly
+5. **Flow direction**: Identify any retrograde flow from left ventricle to left atrium
+
+Example structure: "During ventricular systole, [presence/absence] of signal void or turbulent jet is observed extending from the mitral valve into the left atrium. The left atrium shows [normal/abnormal] signal pattern. Valve coaptation appears [normal/abnormal]. This indicates [regurgitation present/absent]." """,
+
+    # Tricuspid Regurgitation
+    ("Tricuspid Regurgitation", "cine_4ch", False): """Your reason should include:
+1. **Systolic phase analysis**: Focus on ventricular systole when tricuspid regurgitation would be visible
+2. **Signal void detection**: Look for dark/turbulent signal voids (flow jets) extending from the tricuspid valve into the right atrium
+3. **Atrial cavity assessment**: Examine the right atrium for abnormal signal patterns during systole
+4. **Valve coaptation**: Assess whether the tricuspid valve appears to close properly
+5. **Flow direction**: Identify any retrograde flow from right ventricle to right atrium
+
+Example structure: "During ventricular systole, [presence/absence] of signal void or turbulent jet is observed extending from the tricuspid valve into the right atrium. The right atrium shows [normal/abnormal] signal pattern. Valve coaptation appears [normal/abnormal]. This indicates [regurgitation present/absent]." """,
+
+    # Aortic Regurgitation
+    ("Aortic Regurgitation", "cine_3ch", False): """Your reason should include:
+1. **Diastolic phase analysis**: Focus on ventricular diastole when aortic regurgitation would be visible
+2. **Signal void detection**: Look for dark/turbulent signal voids (flow jets) extending from the aortic valve into the left ventricular outflow tract (LVOT)
+3. **LVOT assessment**: Examine the LVOT for abnormal signal patterns during diastole
+4. **Valve coaptation**: Assess whether the aortic valve appears to close properly
+5. **Flow direction**: Identify any retrograde flow from aorta to left ventricle
+
+Example structure: "During ventricular diastole, [presence/absence] of signal void or turbulent jet is observed extending from the aortic valve into the LVOT. The LVOT shows [normal/abnormal] signal pattern. Valve coaptation appears [normal/abnormal]. This indicates [regurgitation present/absent]." """,
+
+    # Special Signs
+    ("Special Signs", "cine_3ch", True): """Your reason should include:
+1. **LVOT analysis**: Examine the left ventricular outflow tract for signs of obstruction (SAM sign, narrowing)
+2. **Aortic valve assessment**: Look for signs of aortic stenosis (high-velocity jets, turbulence)
+3. **LV shape evaluation**: Assess the left ventricular shape for characteristic signs (spade sign, etc.)
+4. **Systolic abnormalities**: Identify any abnormal systolic patterns or configurations
+5. **Specific sign identification**: Clearly identify which specific sign(s) are present or absent
+
+Example structure: "The LVOT shows [normal/abnormal] configuration with [specific observations]. The aortic valve demonstrates [normal/abnormal] flow patterns. The LV shape exhibits [normal/characteristic abnormality]. [Specific sign identification]." """,
+
+    # Pericardial Effusion
+    ("Pericardial Effusion", "cine_4ch", False): """Your reason should include:
+1. **Pericardial space assessment**: Examine the space between the heart and pericardium
+2. **Fluid signal detection**: Look for abnormal signal (bright or dark) indicating fluid accumulation
+3. **Location identification**: Note the specific location of any fluid (anterior, posterior, circumferential)
+4. **Thickness measurement**: If present, describe the thickness of the effusion
+5. **Comparison to normal**: Compare to what would be expected in normal pericardium
+
+Example structure: "The pericardial space shows [normal/abnormal] appearance. [Presence/absence] of abnormal signal (bright or dark) is observed between the heart and pericardium. The location is [specific location]. The effusion thickness is [if present]. This indicates [effusion present/absent]." """,
+
+    # Pleural Effusion
+    ("Pleural Effusion", "cine_4ch", False): """Your reason should include:
+1. **Pleural space assessment**: Examine the pleural spaces (right and/or left) adjacent to the heart
+2. **Fluid signal detection**: Look for abnormal signal (bright or dark) indicating fluid accumulation in pleural spaces
+3. **Location identification**: Note which pleural space(s) show abnormalities (right, left, or both)
+4. **Lung interface**: Assess the interface between lung and pleural space
+5. **Comparison to normal**: Compare to what would be expected in normal pleural spaces
+
+Example structure: "The pleural spaces show [normal/abnormal] appearance. [Presence/absence] of abnormal signal is observed in the [right/left/both] pleural space(s). The lung-pleural interface appears [normal/abnormal]. This indicates [effusion present/absent]." """,
+}
+
 # ==================== Test Model Prompt Templates ====================
 class TestModelPromptGenerator:
     """Test model prompt generator (for making models answer questions)"""
@@ -409,6 +512,22 @@ Answer:"""
         return base + instruction
     
     @staticmethod
+    def get_reason_template(field: str, sequence_view: str, is_multiple_choice: bool) -> Optional[str]:
+        """
+        Get reason analysis template for specific field and question type
+        
+        Args:
+            field: Field name
+            sequence_view: Sequence view
+            is_multiple_choice: Whether it is multiple choice
+            
+        Returns:
+            Reason template string if found, otherwise None
+        """
+        key = (field, sequence_view, is_multiple_choice)
+        return REASON_TEMPLATES.get(key)
+    
+    @staticmethod
     def get_cine_specific_prompt(field: str,
                                  sequence_view: str,
                                  is_multiple_choice: bool,
@@ -428,21 +547,23 @@ Answer:"""
         """
         # Handle special case for Valves field
         if field == "Valves":
-            # Determine which valve from question
-            if "Mitral" in question:
+            # Determine which valve from question (support both English and Chinese)
+            question_lower = question.lower()
+            if "mitral" in question_lower or "二尖瓣" in question or "mitral valve" in question_lower:
                 field_key = "Mitral Regurgitation"
-            elif "Tricuspid" in question:
+            elif "tricuspid" in question_lower or "三尖瓣" in question or "tricuspid valve" in question_lower:
                 field_key = "Tricuspid Regurgitation"
-            elif "Aortic" in question:
+            elif "aortic" in question_lower or "主动脉瓣" in question or "aortic valve" in question_lower:
                 field_key = "Aortic Regurgitation"
             else:
                 return None
         # Handle special case for Effusion field
         elif field == "Effusion":
-            # Determine which type of effusion from question
-            if "Pericardial" in question:
+            # Determine which type of effusion from question (support both English and Chinese)
+            question_lower = question.lower()
+            if "pericardial" in question_lower or "心包" in question or "pericardial effusion" in question_lower:
                 field_key = "Pericardial Effusion"
-            elif "Pleural" in question:
+            elif "pleural" in question_lower or "胸腔" in question or "pleural effusion" in question_lower:
                 field_key = "Pleural Effusion"
             else:
                 return None
@@ -457,17 +578,40 @@ Answer:"""
             # If reason needs to be included, modify prompt
             if include_reason:
                 # Remove "No explanations, reasoning" restriction and add reason requirement
-                base_prompt = base_prompt.replace(
-                    "- No explanations, reasoning, descriptions, confidence, or extra symbols.",
-                    "- Provide a brief reason after your answer."
-                )
-                base_prompt = base_prompt.replace(
-                    "- Do NOT output explanations, reasoning, descriptions, confidence, or any extra characters (commas allowed).",
-                    "- Output your answer first, then provide a brief reason."
-                )
+                # Try multiple variations of the restriction text
+                replacements = [
+                    ("- No explanations, reasoning, descriptions, confidence, or extra characters.", 
+                     "- Output your answer first, then provide a brief reason."),
+                    ("- Do NOT output explanations, reasoning, descriptions, confidence, or any extra characters (commas allowed).",
+                     "- Output your answer first, then provide a brief reason."),
+                    ("- No explanations, reasoning, descriptions, confidence, or extra symbols.",
+                     "- Output your answer first, then provide a brief reason."),
+                    ("- Output MUST be a single letter only (A or B).",
+                     "- Output your answer first, then provide a brief reason."),
+                    ("- Output MUST be letters only; use English commas for multiple selections (e.g., B or C,D).",
+                     "- Output your answer first, then provide a brief reason."),
+                    ("No explanations, reasoning, descriptions, confidence, or extra characters.",
+                     "Output your answer first, then provide a brief reason."),
+                    ("Do NOT output explanations, reasoning, descriptions, confidence, or any extra characters (commas allowed).",
+                     "Output your answer first, then provide a brief reason.")
+                ]
                 
-                # Add format requirement at the end of prompt
-                base_prompt += "\n\nPlease provide your answer in the following format:\nAnswer: [letter(s), e.g., A or B,C]\nReason: [brief explanation of why you chose this answer]"
+                for old_text, new_text in replacements:
+                    if old_text in base_prompt:
+                        base_prompt = base_prompt.replace(old_text, new_text)
+                
+                # Get reason template for this field
+                reason_template = TestModelPromptGenerator.get_reason_template(field_key, sequence_view, is_multiple_choice)
+                
+                # Add format requirement with reason template
+                format_instruction = "\n\nIMPORTANT: Please provide your answer in the following format:\nAnswer: [letter(s), e.g., A or B,C]\nReason: [detailed explanation of why you chose this answer]"
+                
+                if reason_template:
+                    format_instruction += f"\n\nWhen providing your reason, please follow this analysis framework:\n{reason_template}"
+                
+                format_instruction += "\n\nYou MUST include both Answer and Reason in your response."
+                
+                base_prompt += format_instruction
             
             return base_prompt
         

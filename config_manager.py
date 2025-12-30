@@ -61,7 +61,6 @@ class ModelConfigManager:
                     "model": "qwen3-vl-235b-a22b-thinking",
                     "api_key": "a6088cfd-b3c4-4793-ae12-4396240cbbed",
                     "base_url": "https://kspmas.ksyun.com/v1/",
-                    "max_tokens": 500,
                     "temperature": 0.0,
                     "description": "Kingsoft Cloud Qwen3 VL 235B Model"
                 }

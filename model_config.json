@@ -2,10 +2,9 @@
   "models": {
     "gpt-4o": {
       "type": "gpt",
-      "model": "gpt-4o",
+      "model": "mos-1",
       "api_key": "",
       "base_url": null,
-      "max_tokens": 500,
       "temperature": 0.0,
       "description": "OpenAI GPT-4o模型"
     },
@@ -14,16 +13,14 @@
       "model": "gpt-4-vision-preview",
       "api_key": "",
       "base_url": null,
-      "max_tokens": 500,
       "temperature": 0.0,
       "description": "OpenAI GPT-4 Vision模型"
     },
     "qwen3-vl-235b": {
       "type": "ksyun",
       "model": "qwen3-vl-235b-a22b-thinking",
-      "api_key": "",
+      "api_key": "a6088cfd-b3c4-4793-ae12-4396240cbbed",
       "base_url": "https://kspmas.ksyun.com/v1/",
-      "max_tokens": 500,
       "temperature": 0.0,
       "description": "Kingsoft Cloud Qwen3 VL 235B Model"
     },
@@ -32,7 +29,6 @@
       "model": "qwen-vl-max",
       "api_key": "",
       "base_url": null,
-      "max_tokens": 500,
       "temperature": 0.0,
       "description": "阿里云Qwen VL Max模型"
     },
@@ -41,9 +37,16 @@
       "model": "qwen-vl-plus",
       "api_key": "",
       "base_url": null,
-      "max_tokens": 500,
       "temperature": 0.0,
       "description": "阿里云Qwen VL Plus模型"
+    },
+    "gpt-5": {
+      "type": "ksyun",
+      "model": "mog-1",
+      "api_key": "a6088cfd-b3c4-4793-ae12-4396240cbbed",
+      "base_url": "https://kspmas.ksyun.com/v1/",
+      "temperature": 0.0,
+      "description": "MOG-1 Model (alias: gpt-5)"
     }
   },
   "default_model": "qwen3-vl-235b",
