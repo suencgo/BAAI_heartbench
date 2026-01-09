@@ -7,11 +7,21 @@
 1. **多模型支持**：支持GPT、Qwen、Ksyun等不同API模型
 2. **配置管理**：通过配置文件管理模型别名、API密钥等，使用更直观
 3. **智能Prompt**：针对不同序列类型和题目类型自动生成优化的prompt
-4. **序列过滤**：支持通过 `--filter_sequence` 参数过滤特定序列类型的题目（如只测试cine序列）
-5. **批量测试**：提供 `batch_test_cine.py` 脚本，可自动批量测试所有病人的特定序列
-6. **灵活评估**：支持规则评估和Judge模型评估两种方式
-7. **详细报告**：生成JSON和TSV格式的详细评估报告，包含答案推理原因
-8. **评估指标**：支持准确率（accuracy）和多选题命中率（hit）指标
+   - **Cine序列**：11个字段的专门prompt templates（Thickening、Wall Motion、Systolic Function、Valves、Special Signs、Effusion等）
+   - **LGE序列**：7个字段的专门prompt templates（Enhancement Status、Abnormal Signal、High Signal分布、Special Description等）
+   - **Perfusion序列**：4个字段的专门prompt templates（Perfusion Status、Abnormal Regions、Signal Characteristics、Myocardial Layer）
+   - **T2序列**：4个字段的专门prompt templates（T2 Signal、Abnormal Segments/Regions、Signal Distribution）
+4. **结构化Reason分析**：为每个题目类型提供5步分析框架，引导模型进行深入、有针对性的图像分析
+5. **v2设计特性**：
+   - 严格的两行输出格式（Line 1: Answer, Line 2: Reason）
+   - 多选题包含Z. None选项，避免强制选择
+   - 图像仅推理（移除临床解释，保持严格视觉推理）
+   - 操作性的视觉定义（特别是灌注的Reduced/Delayed/Defect）
+6. **序列过滤**：支持通过 `--filter_sequence` 参数过滤特定序列类型的题目（如只测试cine序列）
+7. **批量测试**：提供 `batch_test_cine.py` 脚本，可自动批量测试所有病人的特定序列
+8. **灵活评估**：支持规则评估和Judge模型评估两种方式
+9. **详细报告**：生成JSON和TSV格式的详细评估报告，包含答案推理原因
+10. **评估指标**：支持准确率（accuracy）和多选题命中率（hit）指标
 
 ## 文件结构
 
@@ -251,13 +261,40 @@ python batch_test_cine.py --model_alias qwen3-vl-235b --filter_sequence cine --s
 
 ## 支持的序列类型
 
+框架支持以下序列类型，每个序列都有专门设计的prompt templates和reason analysis templates：
+
+### Cine序列
 - `cine_sax`: Cine序列短轴切面
+  - 支持的字段：Thickening（增厚模式）
 - `cine_4ch`: Cine序列四腔心切面
+  - 支持的字段：Wall Motion Coordination（室壁运动协调性）、Wall Motion Amplitude（室壁运动幅度）、Systolic Function（收缩功能）、Diastolic Function（舒张功能）、Valves（瓣膜反流：二尖瓣、三尖瓣）、Effusion（积液：心包积液、胸腔积液）
 - `cine_3ch`: Cine序列三腔心切面
+  - 支持的字段：Valves（瓣膜反流：主动脉瓣）、Special Signs（特殊征象）
+
+### LGE序列（Late Gadolinium Enhancement）
 - `LGE_sax`: LGE序列短轴切面
+  - 支持的字段：Enhancement Status（强化状态）、Abnormal Signal（异常信号）、High Signal Abnormal Region（高信号异常分区）、High Signal Distribution Pattern（高信号分布形状）、High Signal Myocardial Layer（高信号心肌层）
 - `LGE_4ch`: LGE序列四腔心切面
+  - 支持的字段：High Signal Abnormal Segment（高信号异常节段）、Special Description（特殊描述）
+
+### Perfusion序列（First-pass Myocardial Perfusion）
 - `perfusion`: 灌注序列
+  - 支持的字段：Perfusion Status（灌注状态）、Abnormal Regions（异常区域）、Perfusion Abnormality Signal Characteristics（灌注异常信号特征：Reduced/Delayed/Defect）、Myocardial Layer（心肌层）
+
+### T2序列（T2-weighted）
 - `T2_sax`: T2序列短轴切面
+  - 支持的字段：T2 Signal（T2信号）、Abnormal Segments（异常节段）、Abnormal Regions（异常区域）、Signal Distribution（信号分布）
+
+每个序列的prompt template都包含：
+- 明确的角色定义和任务说明
+- 严格的输出格式要求（支持两行格式：Answer + Reason）
+- 操作性的视觉定义（特别是多选项任务）
+- 图像仅推理约束（不使用外部医学知识）
+
+每个字段的reason template都提供：
+- 5步结构化分析框架
+- 具体的观察指导（告诉模型应该看什么）
+- 图像特征描述要求（信号强度、位置、分布等）
 
 ## 输出文件
 
@@ -383,6 +420,44 @@ result = evaluator.evaluate()
 - **accuracy**: 准确率（所有答案完全匹配为1.0，否则为0.0）
 - **hit**: 命中率（至少选中一个正确答案为1.0，否则为0.0）
 
+## Prompt Templates 和 Reason Templates
+
+框架为每个序列类型和字段提供了专门设计的prompt templates和reason analysis templates，确保模型能够进行深入、有针对性的分析。
+
+### Prompt Templates特性
+
+1. **序列特定性**：每个序列（Cine、LGE、Perfusion、T2）都有针对其医学用途的专门prompt
+2. **字段特定性**：每个字段都有针对其评估目标的专门prompt
+3. **v2设计标准**：
+   - 严格的两行输出格式（当`include_reason=True`时）
+   - 多选题包含Z. None选项，避免在没有异常时强制选择
+   - 图像仅推理约束，不使用外部医学知识或临床上下文
+   - 操作性的视觉定义，特别是对于灌注序列的Reduced/Delayed/Defect分类
+
+### Reason Templates特性
+
+1. **5步分析框架**：每个reason template都包含5个关键分析步骤
+2. **结构化指导**：明确告诉模型应该观察哪些特征、如何描述、如何比较
+3. **图像特征聚焦**：专注于可见的图像特征（信号强度、位置、分布、连续性等）
+
+### 使用示例
+
+当使用`--include_reason`参数时，模型会收到包含reason template的完整prompt，例如：
+
+```
+You are a Vision-Language Model (VLM) for cardiac LGE MRI.
+Task: Using ONLY the provided image frames, decide whether abnormal delayed enhancement is present...
+
+When providing your reason, please follow this analysis framework:
+1) Enhancement detection: whether any myocardium contains visually brighter foci...
+2) Contrast comparison: compare suspected regions against adjacent normal myocardium...
+3) Spatial consistency: confirm the bright area persists across adjacent frames...
+4) Location cue: describe where it appears...
+5) Conclusion: state present vs absent
+```
+
+详细的prompt和reason template设计文档请参考：[sequence_prompt_design.md](sequence_prompt_design.md)
+
 ## 注意事项
 
 1. **图片路径**：确保JSON中的图片路径正确，且相对于`image_base_dir`
@@ -393,6 +468,8 @@ result = evaluator.evaluate()
 6. **API密钥安全**：不要在配置文件中提交真实的API密钥，建议使用环境变量或`.gitignore`忽略配置文件
 7. **序列过滤**：使用 `--filter_sequence` 参数时，过滤是基于 `sequence_view` 字段的字符串匹配（不区分大小写），例如 `cine` 会匹配 `cine_sax`、`cine_4ch`、`cine_3ch` 等
 8. **批量测试**：批量测试脚本会自动查找所有 `patient_*_vqa_png.json` 文件，确保数据文件命名符合规范
+9. **Prompt Templates**：框架会自动为支持的序列和字段选择对应的prompt template，如果字段不匹配，会使用通用prompt
+10. **Reason输出**：使用`--include_reason`时，模型会被要求按照reason template的框架进行分析，输出更结构化的推理过程
 
 ## 更多信息
 

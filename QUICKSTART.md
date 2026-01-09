@@ -200,24 +200,41 @@ python batch_test_cine.py --model_alias qwen3-vl-235b --filter_sequence cine --s
 
 1. **多模型支持**：支持GPT、Qwen、Ksyun等不同API模型
 2. **配置管理**：通过配置文件管理模型别名、API密钥等，使用更直观
-3. **智能Prompt**：针对不同序列类型（cine_sax, LGE_sax, perfusion等）和题目类型（单选/多选）自动生成优化的prompt
-4. **序列过滤**：支持通过 `--filter_sequence` 参数过滤特定序列类型的题目（如只测试cine序列）
-5. **批量测试**：提供 `batch_test_cine.py` 脚本，可自动批量测试所有病人的特定序列
-6. **灵活评估**：
+3. **智能Prompt Templates**：
+   - **Cine序列**：11个字段的专门prompt templates（Thickening、Wall Motion、Systolic Function、Valves、Special Signs、Effusion等）
+   - **LGE序列**：7个字段的专门prompt templates（Enhancement Status、Abnormal Signal、High Signal分布、Special Description等）
+   - **Perfusion序列**：4个字段的专门prompt templates（Perfusion Status、Abnormal Regions、Signal Characteristics、Myocardial Layer）
+   - **T2序列**：4个字段的专门prompt templates（T2 Signal、Abnormal Segments/Regions、Signal Distribution）
+   - 所有prompt遵循v2设计标准：严格两行输出格式、Z. None选项、图像仅推理
+4. **结构化Reason分析**：为每个题目类型提供5步分析框架，引导模型进行深入、有针对性的图像分析
+5. **序列过滤**：支持通过 `--filter_sequence` 参数过滤特定序列类型的题目（如只测试cine序列）
+6. **批量测试**：提供 `batch_test_cine.py` 脚本，可自动批量测试所有病人的特定序列
+7. **灵活评估**：
    - 规则评估：基于答案提取和匹配的快速评估
    - Judge模型评估：使用LLM进行更智能的语义评估
-7. **详细报告**：生成JSON和TSV格式的详细评估报告，包含答案推理原因
-8. **评估指标**：支持准确率（accuracy）和多选题命中率（hit）指标
+8. **详细报告**：生成JSON和TSV格式的详细评估报告，包含答案推理原因
+9. **评估指标**：支持准确率（accuracy）和多选题命中率（hit）指标
 
 ## 支持的序列类型
 
-- `cine_sax`: Cine序列短轴切面
-- `cine_4ch`: Cine序列四腔心切面
-- `cine_3ch`: Cine序列三腔心切面
-- `LGE_sax`: LGE序列短轴切面
-- `LGE_4ch`: LGE序列四腔心切面
-- `perfusion`: 灌注序列
-- `T2_sax`: T2序列短轴切面
+框架为以下序列类型提供了专门设计的prompt templates和reason analysis templates：
+
+- **Cine序列**：
+  - `cine_sax`: 短轴切面（Thickening字段）
+  - `cine_4ch`: 四腔心切面（Wall Motion、Systolic Function、Valves、Effusion字段）
+  - `cine_3ch`: 三腔心切面（Valves、Special Signs字段）
+
+- **LGE序列**（Late Gadolinium Enhancement）：
+  - `LGE_sax`: 短轴切面（Enhancement Status、Abnormal Signal、High Signal分布等字段）
+  - `LGE_4ch`: 四腔心切面（High Signal Abnormal Segment、Special Description字段）
+
+- **Perfusion序列**（First-pass Myocardial Perfusion）：
+  - `perfusion`: 灌注序列（Perfusion Status、Abnormal Regions、Signal Characteristics、Myocardial Layer字段）
+
+- **T2序列**（T2-weighted）：
+  - `T2_sax`: 短轴切面（T2 Signal、Abnormal Segments/Regions、Signal Distribution字段）
+
+每个序列的prompt template都包含严格的输出格式要求、操作性的视觉定义和图像仅推理约束。详细的prompt和reason template设计请参考 [sequence_prompt_design.md](sequence_prompt_design.md)
 
 ## 输出文件
 
@@ -344,8 +361,19 @@ result = evaluator.evaluate()
 5. **输出目录**：如果不指定`--output_dir`，结果会自动保存到`Heart_bench/output/{model_name}/`目录
 6. **API密钥安全**：不要在配置文件中提交真实的API密钥，建议使用环境变量或`.gitignore`忽略配置文件
 
+## Prompt Templates 和 Reason Templates
+
+框架为每个序列类型和字段提供了专门设计的prompt templates和reason analysis templates：
+
+- **Prompt Templates**：针对每个序列和字段的专门prompt，包含严格的输出格式要求、操作性的视觉定义
+- **Reason Templates**：5步结构化分析框架，引导模型进行深入、有针对性的图像分析
+- **v2设计特性**：两行输出格式、Z. None选项、图像仅推理、操作性视觉定义
+
+详细的设计文档请参考：[sequence_prompt_design.md](sequence_prompt_design.md)
+
 ## 更多信息
 
 - 详细文档请参考 [README.md](README.md)
+- Prompt和Reason Template设计文档请参考 [sequence_prompt_design.md](sequence_prompt_design.md)
 - 配置管理示例请参考 [example_config.py](example_config.py)
 - 使用示例请参考 [example_usage.py](example_usage.py)
