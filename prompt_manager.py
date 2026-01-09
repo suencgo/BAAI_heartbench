@@ -320,6 +320,346 @@ A. Yes (effusion present)
 B. No (effusion absent)""",
 }
 
+# ==================== LGE Sequence Specific System Prompts ====================
+LGE_SPECIFIC_PROMPTS = {
+    # Enhancement Status - Single-choice
+    ("Enhancement Status", "LGE_sax", False): """You are a Vision-Language Model (VLM) for cardiac LGE MRI.
+Task: Using ONLY the provided image frames, decide whether abnormal delayed enhancement is present (single-choice).
+
+Strict rules:
+- Choose exactly ONE option: A or B.
+- Output format:
+  - If include_reason=True: Line 1 = single letter; Line 2 = "Reason: ..."
+  - Else: Line 1 = single letter only
+- Use images only; do not use external knowledge.
+- Even if uncertain, choose the most likely answer.
+
+Options:
+A. No Abnormal Delayed Enhancement
+B. Abnormal Delayed Enhancement""",
+
+    # Abnormal Signal - Single-choice
+    ("Abnormal Signal", "LGE_sax", False): """You are a Vision-Language Model (VLM) for cardiac LGE MRI.
+Task: Using ONLY the provided image frames, classify the signal appearance of the abnormal enhancement (single-choice).
+
+Strict rules:
+- Choose exactly ONE option: A or B.
+- Output format:
+  - If include_reason=True: Line 1 = single letter; Line 2 = "Reason: ..."
+  - Else: Line 1 = single letter only
+- Use images only; do not use external knowledge.
+- Even if uncertain, choose the most likely answer.
+
+Operational definitions (visual):
+- High Signal: the abnormal area is predominantly bright and relatively homogeneous.
+- Mixed Signal: within the abnormal area, brightness is heterogeneous (bright interspersed with darker components) or clearly non-uniform.
+
+Options:
+A. High Signal
+B. Mixed Signal""",
+
+    # High Signal Abnormal Segment - Multi-select
+    ("High Signal Abnormal Segment", "LGE_4ch", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (4-chamber view).
+Task: Using ONLY the provided image frames, select which long-axis segments show high-signal abnormal enhancement (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/Z.
+- Output letters only; use English commas for multiple selections (e.g., B or C,D or Z).
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- If no clear abnormal enhancement is visible, choose Z.
+
+Options:
+A. Basal Segment
+B. Mid Segment
+C. Apical Segment
+D. Apex
+Z. None""",
+
+    # High Signal Abnormal Region - Multi-select
+    ("High Signal Abnormal Region", "LGE_sax", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
+Task: Using ONLY the provided image frames, select which LV wall regions show high-signal abnormal enhancement (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/E/F/Z.
+- Output letters only; use English commas for multiple selections.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- If no clear abnormal enhancement is visible, choose Z.
+
+Options:
+A. Anterior Wall
+B. Anteroseptal Wall
+C. Inferoseptal Wall
+D. Inferior Wall
+E. Inferolateral Wall
+F. Anterolateral Wall
+Z. None""",
+
+    # High Signal Distribution Pattern - Multi-select
+    ("High Signal Distribution Pattern", "LGE_sax", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
+Task: Using ONLY the provided image frames, select the distribution pattern(s) of high-signal enhancement (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/E/Z.
+- Output letters only; use English commas.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- If no clear enhancement is visible, choose Z.
+
+Operational visual definitions:
+- Diffuse: widespread involvement across a large portion of myocardium.
+- Linear: elongated band-like enhancement.
+- Patchy: multiple irregular, separated foci.
+- Transmural: appears to span nearly full wall thickness in the affected region.
+- Speckled: many tiny scattered dots.
+
+Options:
+A. Diffuse
+B. Linear
+C. Patchy
+D. Transmural
+E. Speckled
+Z. None""",
+
+    # High Signal Myocardial Layer - Multi-select
+    ("High Signal Myocardial Layer", "LGE_sax", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
+Task: Using ONLY the provided image frames, select which myocardial layer(s) show high-signal enhancement (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/E/Z.
+- Output letters only; use English commas.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- If no clear enhancement is visible, choose Z.
+
+Operational visual definitions:
+- Subendocardial: enhancement adjacent to endocardial border.
+- Mid-myocardial: enhancement centered within wall thickness.
+- Subepicardial: enhancement adjacent to epicardial surface.
+- Transmural: enhancement spans most or all wall thickness locally.
+- Papillary Muscle: enhancement within papillary muscle structure (if clearly visible).
+
+Options:
+A. Subendocardial
+B. Mid-myocardial
+C. Transmural
+D. Subepicardial
+E. Papillary Muscle
+Z. None""",
+
+    # Special Description - Multi-select
+    ("Special Description", "LGE_4ch", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (4-chamber view).
+Task: Using ONLY the provided image frames, select any special visible features (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D.
+- Output letters only; use English commas.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- If none apply, choose A.
+
+Options:
+A. None
+B. Pericardial Abnormality
+C. High Signal at Ventricular Septal Insertion Point
+D. High Signal in Right Ventricle""",
+}
+
+# ==================== Perfusion Sequence Specific System Prompts ====================
+PERFUSION_SPECIFIC_PROMPTS = {
+    # Perfusion Status - Single-choice
+    ("Perfusion Status", "perfusion", False): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI.
+Task: Using ONLY the provided image frames, decide whether myocardial perfusion appears normal or abnormal (single-choice).
+
+Strict rules:
+- Choose exactly ONE option: A or B.
+- Output format:
+  - If include_reason=True: Line 1 = single letter; Line 2 = "Reason: ..."
+  - Else: Line 1 = single letter only
+- Use images only; do not use external knowledge.
+- Evaluate across the provided time frames (arrival and wash-in phase as shown).
+- Even if uncertain, choose the most likely answer.
+
+Options:
+A. Normal
+B. Abnormal""",
+
+    # Abnormal Regions - Multi-select
+    ("Abnormal Regions", "perfusion", True): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI (short-axis view).
+Task: Using ONLY the provided image frames, select which LV wall regions show abnormal perfusion (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/E/F/Z.
+- Output letters only; use English commas.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- If no abnormal region is visible, choose Z.
+
+Options:
+A. Anterior wall
+B. Anteroseptal wall
+C. Inferoseptal wall
+D. Inferior wall
+E. Inferolateral wall
+F. Anterolateral wall
+Z. None""",
+
+    # Perfusion Abnormality Signal Characteristics - Single-choice
+    ("Perfusion Abnormality Signal Characteristics", "perfusion", False): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI.
+Task: Using ONLY the provided image frames, classify the visual type of perfusion abnormality (single-choice).
+
+Strict rules:
+- Choose exactly ONE option: A or B or C.
+- Output format:
+  - If include_reason=True: Line 1 = single letter; Line 2 = "Reason: ..."
+  - Else: Line 1 = single letter only
+- Use images only; do not use external knowledge.
+- Use the operational visual definitions below.
+- Even if uncertain, choose the most likely answer.
+
+Operational visual definitions (time-based, image-only):
+- Reduced perfusion: the region enhances, but remains consistently darker than remote myocardium across frames.
+- Delayed perfusion: the region is darker early, then partially/mostly catches up in later frames.
+- Perfusion defect: the region shows minimal or no enhancement across the provided frames.
+
+Options:
+A. Reduced perfusion
+B. Delayed perfusion
+C. Perfusion defect""",
+
+    # Myocardial Layer - Multi-select
+    ("Myocardial Layer", "perfusion", True): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI (short-axis view).
+Task: Using ONLY the provided image frames, select which myocardial layers show perfusion abnormalities (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/E/Z.
+- Output letters only; use English commas.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- If no abnormality is visible, choose Z.
+
+Operational visual definitions:
+- Subendocardial: abnormality adjacent to endocardial border.
+- Mid-myocardial: centered within wall thickness.
+- Subepicardial: adjacent to epicardial surface.
+- Transmural: spans most/all wall thickness locally.
+- Papillary muscle: within papillary muscle (if visible).
+
+Options:
+A. Subendocardial
+B. Mid-myocardial
+C. Subepicardial
+D. Transmural
+E. Papillary muscle
+Z. None""",
+}
+
+# ==================== T2 Sequence Specific System Prompts ====================
+T2_SPECIFIC_PROMPTS = {
+    # T2 Signal - Single-choice
+    ("T2 Signal", "T2_sax", False): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
+Task: Using ONLY the provided image frames, classify the overall myocardial T2 signal appearance (single-choice).
+
+Strict rules:
+- Choose exactly ONE option: A or B or C or D.
+- Output format:
+  - If include_reason=True: Line 1 = single letter; Line 2 = "Reason: ..."
+  - Else: Line 1 = single letter only
+- Use images only; do not use external knowledge.
+- Even if uncertain, choose the most likely answer.
+
+Options:
+A. Normal
+B. High Signal
+C. Low Signal
+D. Mixed Signal""",
+
+    # Abnormal Segments - Multi-select
+    ("Abnormal Segments", "T2_sax", True): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
+Task: Using ONLY the provided image frames, select which LV segments show abnormal T2 signal (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/Z.
+- Output letters only; use English commas.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- If no abnormal segment is visible, choose Z.
+
+Options:
+A. Basal segment
+B. Mid segment
+C. Apical segment
+D. Apex
+Z. None""",
+
+    # Abnormal Regions - Multi-select
+    ("Abnormal Regions", "T2_sax", True): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
+Task: Using ONLY the provided image frames, select which LV wall regions show abnormal T2 signal (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/E/F/Z.
+- Output letters only; use English commas.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- If no abnormal region is visible, choose Z.
+
+Options:
+A. Anterior wall
+B. Anteroseptal wall
+C. Inferoseptal wall
+D. Inferior wall
+E. Inferolateral wall
+F. Anterolateral wall
+Z. None""",
+
+    # Signal Distribution Pattern - Multi-select
+    ("Signal Distribution", "T2_sax", True): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
+Task: Using ONLY the provided image frames, select the distribution pattern(s) of abnormal T2 signal (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/E/Z.
+- Output letters only; use English commas.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- If no abnormal signal is visible, choose Z.
+
+Operational visual definitions:
+- Diffuse: widespread involvement across a large portion of myocardium.
+- Linear: elongated band-like signal change.
+- Patchy: multiple irregular, separated foci.
+- Transmural: spans nearly full wall thickness locally.
+- Speckled: many tiny scattered dots.
+
+Options:
+A. Diffuse
+B. Linear
+C. Patchy
+D. Transmural
+E. Speckled
+Z. None""",
+}
+
 # ==================== Reason Analysis Templates ====================
 REASON_TEMPLATES = {
     # Thickening (LV Wall Thickness)
@@ -421,6 +761,129 @@ Example structure: "The pericardial space shows [normal/abnormal] appearance. [P
 5. **Comparison to normal**: Compare to what would be expected in normal pleural spaces
 
 Example structure: "The pleural spaces show [normal/abnormal] appearance. [Presence/absence] of abnormal signal is observed in the [right/left/both] pleural space(s). The lung-pleural interface appears [normal/abnormal]. This indicates [effusion present/absent]." """,
+
+    # ==================== LGE Reason Templates ====================
+    # Enhancement Status
+    ("Enhancement Status", "LGE_sax", False): """Your reason should include (image-based only):
+1) Enhancement detection: whether any myocardium contains visually brighter foci compared with surrounding myocardium
+2) Contrast comparison: compare suspected regions against adjacent normal myocardium and blood pool (as reference only)
+3) Spatial consistency: confirm the bright area persists across adjacent frames/slices (if available), not a single-frame noise
+4) Location cue: describe where it appears (e.g., septal vs lateral; anterior vs inferior; basal/mid/apical if visible)
+5) Conclusion: state present vs absent""",
+
+    # Abnormal Signal
+    ("Abnormal Signal", "LGE_sax", False): """Your reason should include (image-based only):
+1) Homogeneity: uniform bright vs heterogeneous (mixed bright/dark) within the suspected region
+2) Boundary/texture: smooth continuous bright area vs mottled/variegated appearance
+3) Frame consistency: pattern repeats across frames rather than appearing as isolated noise
+4) Contrast: explain how it differs from adjacent myocardium
+5) Classification: high vs mixed""",
+
+    # High Signal Abnormal Segment
+    ("High Signal Abnormal Segment", "LGE_4ch", True): """Your reason should include (image-based only):
+1) Segment identification: which parts of LV long-axis are visible in this 4ch view
+2) Enhancement presence by segment: basal/mid/apical/apex
+3) Distribution along long axis: where it starts and ends
+4) Consistency across frames: persists vs transient artifact
+5) Final selected segments (or None)""",
+
+    # High Signal Abnormal Region
+    ("High Signal Abnormal Region", "LGE_sax", True): """Your reason should include (image-based only):
+1) Region mapping: locate the bright area around the LV circumference
+2) Comparison: abnormal region brighter than adjacent myocardium
+3) Extent: focal vs broad involvement around the ring
+4) Frame consistency: appears across adjacent frames/slices
+5) Selected wall regions (or None)""",
+
+    # High Signal Distribution Pattern
+    ("High Signal Distribution Pattern", "LGE_sax", True): """Your reason should include (image-based only):
+1) Geometry: band-like vs scattered vs widespread
+2) Continuity: continuous vs discontinuous
+3) Size/number: few large foci vs many small foci
+4) Thickness impression: partial vs near full-thickness (if assessable)
+5) Selected pattern(s) (or None)""",
+
+    # High Signal Myocardial Layer
+    ("High Signal Myocardial Layer", "LGE_sax", True): """Your reason should include (image-based only):
+1) Depth: where within the wall the brightness is located
+2) Border proximity: endocardial vs epicardial adjacency
+3) Thickness involvement: partial vs near full thickness
+4) Papillary muscle check (if visible)
+5) Selected layer(s) (or None)""",
+
+    # Special Description
+    ("Special Description", "LGE_4ch", True): """Your reason should include (image-based only):
+1) Pericardium: any visible bright line/thickening consistent across frames
+2) Septal insertion: focal bright signal at RV insertion areas (if visible)
+3) RV myocardium: any abnormal bright signal in RV wall (if visible)
+4) Consistency: seen across frames vs isolated artifact
+5) Selected items or none""",
+
+    # ==================== Perfusion Reason Templates ====================
+    # Perfusion Status
+    ("Perfusion Status", "perfusion", False): """Your reason should include (image-based only):
+1) Global vs regional: whether enhancement appears uniform across myocardium
+2) Temporal behavior: whether any region enhances later or less than others across frames
+3) Regional comparison: compare suspect region to remote myocardium within same frame/time point
+4) Artifact check: note transient endocardial dark rim/motion/coil shading if it explains appearance
+5) Conclusion: normal vs abnormal""",
+
+    # Abnormal Regions
+    ("Abnormal Regions", "perfusion", True): """Your reason should include (image-based only):
+1) Mapping: where the region remains darker than others at the same time point
+2) Circumferential extent: focal vs broad along the LV ring
+3) Temporal persistence: persists across multiple frames rather than a single-frame artifact
+4) Artifact consideration: transient endocardial dark rim vs true persistent regional abnormality
+5) Selected regions (or None)""",
+
+    # Perfusion Abnormality Signal Characteristics
+    ("Perfusion Abnormality Signal Characteristics", "perfusion", False): """Your reason should include (image-based only):
+1) Signal level: darker than remote myocardium vs near absent enhancement
+2) Timing: early dark then catch-up vs persistent dark
+3) Consistency: persists across frames
+4) Artifact check: transient rim-like endocardial darkness or motion
+5) Classification: reduced vs delayed vs defect""",
+
+    # Myocardial Layer
+    ("Myocardial Layer", "perfusion", True): """Your reason should include (image-based only):
+1) Depth: where the dark/under-enhancing area lies within the wall
+2) Border proximity: endocardial vs epicardial adjacency
+3) Thickness: partial vs near full thickness
+4) Papillary muscle check (if visible)
+5) Selected layer(s) (or None)""",
+
+    # ==================== T2 Reason Templates ====================
+    # T2 Signal
+    ("T2 Signal", "T2_sax", False): """Your reason should include (strictly visual):
+1) Overall brightness: myocardium compared with adjacent myocardium in other regions and blood pool (reference only)
+2) Uniformity: homogeneous vs heterogeneous appearance
+3) Regionality: localized bright/dark areas vs diffuse change
+4) Artifact check: motion blur, coil shading, flow-related signal that could mimic changes
+5) Classification: normal/high/low/mixed""",
+
+    # Abnormal Segments
+    ("Abnormal Segments", "T2_sax", True): """Your reason should include (image-based only):
+1) Segment identification: basal/mid/apical/apex in the provided stack/frames
+2) Abnormal signal presence: where myocardium appears brighter/darker than elsewhere
+3) Long-axis distribution: which levels are involved
+4) Consistency: persists across adjacent frames/slices
+5) Selected segments (or None)""",
+
+    # Abnormal Regions
+    ("Abnormal Regions", "T2_sax", True): """Your reason should include (image-based only):
+1) Region mapping: where the abnormal brightness/darkness is located around LV circumference
+2) Comparison: contrast versus adjacent normal myocardium
+3) Extent: focal vs broad involvement
+4) Consistency: across frames/slices
+5) Selected regions (or None)""",
+
+    # Signal Distribution
+    ("Signal Distribution", "T2_sax", True): """Your reason should include (image-based only):
+1) Geometry: band-like vs scattered vs widespread
+2) Continuity: continuous vs discontinuous
+3) Size/number: few large foci vs many small foci
+4) Thickness impression: partial vs near full thickness (if assessable)
+5) Selected pattern(s) (or None)""",
 }
 
 # ==================== Test Model Prompt Templates ====================
@@ -528,94 +991,111 @@ Answer:"""
         return REASON_TEMPLATES.get(key)
     
     @staticmethod
-    def get_cine_specific_prompt(field: str,
-                                 sequence_view: str,
-                                 is_multiple_choice: bool,
-                                 question: str,
-                                 include_reason: bool = False) -> Optional[str]:
+    def get_sequence_specific_prompt(field: str,
+                                     sequence_view: str,
+                                     is_multiple_choice: bool,
+                                     question: str,
+                                     include_reason: bool = False) -> Optional[str]:
         """
-        Get Cine sequence specific prompt
+        Get sequence-specific prompt for LGE, Perfusion, T2, or Cine sequences
         
         Args:
             field: Field name
             sequence_view: Sequence view
             is_multiple_choice: Whether it is multiple choice
             question: Question text (including options)
+            include_reason: Whether to include reason template
             
         Returns:
             Returns matched specific prompt if found, otherwise None
         """
-        # Handle special case for Valves field
-        if field == "Valves":
-            # Determine which valve from question (support both English and Chinese)
-            question_lower = question.lower()
-            if "mitral" in question_lower or "二尖瓣" in question or "mitral valve" in question_lower:
-                field_key = "Mitral Regurgitation"
-            elif "tricuspid" in question_lower or "三尖瓣" in question or "tricuspid valve" in question_lower:
-                field_key = "Tricuspid Regurgitation"
-            elif "aortic" in question_lower or "主动脉瓣" in question or "aortic valve" in question_lower:
-                field_key = "Aortic Regurgitation"
+        # Determine which prompt dictionary to use
+        if sequence_view in ["LGE_sax", "LGE_4ch"]:
+            prompt_dict = LGE_SPECIFIC_PROMPTS
+        elif sequence_view == "perfusion":
+            prompt_dict = PERFUSION_SPECIFIC_PROMPTS
+        elif sequence_view == "T2_sax":
+            prompt_dict = T2_SPECIFIC_PROMPTS
+        elif sequence_view in ["cine_sax", "cine_4ch", "cine_3ch"]:
+            prompt_dict = CINE_SPECIFIC_PROMPTS
+        else:
+            return None
+        
+        # Handle special cases for Cine sequences
+        if sequence_view in ["cine_sax", "cine_4ch", "cine_3ch"]:
+            # Handle special case for Valves field
+            if field == "Valves":
+                question_lower = question.lower()
+                if "mitral" in question_lower or "二尖瓣" in question or "mitral valve" in question_lower:
+                    field_key = "Mitral Regurgitation"
+                elif "tricuspid" in question_lower or "三尖瓣" in question or "tricuspid valve" in question_lower:
+                    field_key = "Tricuspid Regurgitation"
+                elif "aortic" in question_lower or "主动脉瓣" in question or "aortic valve" in question_lower:
+                    field_key = "Aortic Regurgitation"
+                else:
+                    return None
+            # Handle special case for Effusion field
+            elif field == "Effusion":
+                question_lower = question.lower()
+                if "pericardial" in question_lower or "心包" in question or "pericardial effusion" in question_lower:
+                    field_key = "Pericardial Effusion"
+                elif "pleural" in question_lower or "胸腔" in question or "pleural effusion" in question_lower:
+                    field_key = "Pleural Effusion"
+                else:
+                    return None
             else:
-                return None
-        # Handle special case for Effusion field
-        elif field == "Effusion":
-            # Determine which type of effusion from question (support both English and Chinese)
-            question_lower = question.lower()
-            if "pericardial" in question_lower or "心包" in question or "pericardial effusion" in question_lower:
-                field_key = "Pericardial Effusion"
-            elif "pleural" in question_lower or "胸腔" in question or "pleural effusion" in question_lower:
-                field_key = "Pleural Effusion"
-            else:
-                return None
+                field_key = field
         else:
             field_key = field
         
         # Find matching prompt
         key = (field_key, sequence_view, is_multiple_choice)
-        if key in CINE_SPECIFIC_PROMPTS:
-            base_prompt = CINE_SPECIFIC_PROMPTS[key]
+        if key in prompt_dict:
+            base_prompt = prompt_dict[key]
             
             # If reason needs to be included, modify prompt
             if include_reason:
-                # Remove "No explanations, reasoning" restriction and add reason requirement
-                # Try multiple variations of the restriction text
-                replacements = [
-                    ("- No explanations, reasoning, descriptions, confidence, or extra characters.", 
-                     "- Output your answer first, then provide a brief reason."),
-                    ("- Do NOT output explanations, reasoning, descriptions, confidence, or any extra characters (commas allowed).",
-                     "- Output your answer first, then provide a brief reason."),
-                    ("- No explanations, reasoning, descriptions, confidence, or extra symbols.",
-                     "- Output your answer first, then provide a brief reason."),
-                    ("- Output MUST be a single letter only (A or B).",
-                     "- Output your answer first, then provide a brief reason."),
-                    ("- Output MUST be letters only; use English commas for multiple selections (e.g., B or C,D).",
-                     "- Output your answer first, then provide a brief reason."),
-                    ("No explanations, reasoning, descriptions, confidence, or extra characters.",
-                     "Output your answer first, then provide a brief reason."),
-                    ("Do NOT output explanations, reasoning, descriptions, confidence, or any extra characters (commas allowed).",
-                     "Output your answer first, then provide a brief reason.")
-                ]
-                
-                for old_text, new_text in replacements:
-                    if old_text in base_prompt:
-                        base_prompt = base_prompt.replace(old_text, new_text)
-                
                 # Get reason template for this field
                 reason_template = TestModelPromptGenerator.get_reason_template(field_key, sequence_view, is_multiple_choice)
                 
-                # Add format requirement with reason template
-                format_instruction = "\n\nIMPORTANT: Please provide your answer in the following format:\nAnswer: [letter(s), e.g., A or B,C]\nReason: [detailed explanation of why you chose this answer]"
-                
                 if reason_template:
-                    format_instruction += f"\n\nWhen providing your reason, please follow this analysis framework:\n{reason_template}"
-                
-                format_instruction += "\n\nYou MUST include both Answer and Reason in your response."
-                
-                base_prompt += format_instruction
+                    # The v2 prompts already have format instructions in the prompt text
+                    # We need to add the reason template framework before the Options section
+                    # Insert reason template before "Options:" section
+                    if "Options:" in base_prompt:
+                        parts = base_prompt.split("Options:")
+                        if len(parts) == 2:
+                            base_prompt = parts[0] + f"\n\nWhen providing your reason, please follow this analysis framework:\n{reason_template}\n\nOptions:" + parts[1]
+                    else:
+                        # If no Options section, append at the end
+                        base_prompt += f"\n\nWhen providing your reason, please follow this analysis framework:\n{reason_template}"
             
             return base_prompt
         
         return None
+    
+    @staticmethod
+    def get_cine_specific_prompt(field: str,
+                                 sequence_view: str,
+                                 is_multiple_choice: bool,
+                                 question: str,
+                                 include_reason: bool = False) -> Optional[str]:
+        """
+        Get Cine sequence specific prompt (backward compatibility wrapper)
+        
+        Args:
+            field: Field name
+            sequence_view: Sequence view
+            is_multiple_choice: Whether it is multiple choice
+            question: Question text (including options)
+            include_reason: Whether to include reason template
+            
+        Returns:
+            Returns matched specific prompt if found, otherwise None
+        """
+        return TestModelPromptGenerator.get_sequence_specific_prompt(
+            field, sequence_view, is_multiple_choice, question, include_reason
+        )
     
     @staticmethod
     def generate(sequence_view: str,
@@ -636,13 +1116,14 @@ Answer:"""
             field: Field name (for matching specific prompt)
             is_short_answer: Whether it is short answer
         """
-        # If Cine sequence and has field information, try to use specific prompt
+        # If sequence has field information and supports specific prompts, try to use specific prompt
+        supported_sequences = ["cine_sax", "cine_4ch", "cine_3ch", "LGE_sax", "LGE_4ch", "perfusion", "T2_sax"]
         if (field and 
-            sequence_view in ["cine_sax", "cine_4ch", "cine_3ch"] and 
+            sequence_view in supported_sequences and 
             not is_short_answer and 
             question_type != "Short Answer"):
             
-            specific_prompt = TestModelPromptGenerator.get_cine_specific_prompt(
+            specific_prompt = TestModelPromptGenerator.get_sequence_specific_prompt(
                 field, sequence_view, is_multiple_choice, question, include_reason
             )
             
