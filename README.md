@@ -279,7 +279,7 @@ python batch_test_cine.py --model_alias qwen3-vl-235b --filter_sequence cine --s
 
 ### Perfusion序列（First-pass Myocardial Perfusion）
 - `perfusion`: 灌注序列
-  - 支持的字段：Perfusion Status（灌注状态）、Abnormal Regions（异常区域）、Perfusion Abnormality Signal Characteristics（灌注异常信号特征：Reduced/Delayed/Defect）、Myocardial Layer（心肌层）
+  - 支持的字段：Perfusion Status（灌注状态）、Abnormal Segments（异常节段）、Abnormal Regions（异常区域）、Perfusion Abnormality Signal Characteristics（灌注异常信号特征：Reduced/Delayed/Defect）、Myocardial Layer（心肌层）
 
 ### T2序列（T2-weighted）
 - `T2_sax`: T2序列短轴切面
