@@ -474,6 +474,61 @@ A. None
 B. Pericardial Abnormality
 C. High Signal at Ventricular Septal Insertion Point
 D. High Signal in Right Ventricle""",
+
+    # Low Signal Abnormal Region - Multi-select
+    ("Low Signal Abnormal Region", "LGE_sax", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
+Task: Using ONLY the provided image frames, select which LV wall regions show a myocardial low-signal abnormality (hypoenhanced / darker-than-expected area) on LGE (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/E/F/Z.
+- Output letters only; use English commas for multiple selections.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- Only label findings that are visually located within the myocardium (exclude LV cavity/blood pool darkness).
+- Operational criteria (image-only):
+  1) The area is clearly darker than adjacent myocardium in the same frame/slice, AND
+  2) The location/shape is consistent across adjacent frames/slices if available (not a single-frame artifact).
+- If no clear myocardial low-signal abnormality is visible, choose Z.
+
+Options:
+A. Anterior Wall
+B. Anteroseptal Wall
+C. Inferoseptal Wall
+D. Inferior Wall
+E. Inferolateral Wall
+F. Anterolateral Wall
+Z. None""",
+
+    # Low Signal Distribution Pattern - Multi-select
+    ("Low Signal Distribution Pattern", "LGE_sax", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
+Task: Using ONLY the provided image frames, select the distribution pattern(s) of myocardial low-signal abnormality (hypoenhanced / darker-than-expected area) on LGE (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/E/Z.
+- Output letters only; use English commas.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- Apply the pattern labels to the LOW-SIGNAL area itself.
+- If no clear myocardial low-signal abnormality is visible, choose Z.
+
+Operational visual definitions:
+- Diffuse: low-signal involves a large portion of myocardium.
+- Linear: low-signal forms an elongated band-like shape.
+- Patchy: multiple irregular, separated low-signal foci.
+- Transmural: the low-signal area spans nearly full wall thickness locally.
+- Speckled: many tiny scattered low-signal dots.
+
+Options:
+A. Diffuse
+B. Linear
+C. Patchy
+D. Transmural
+E. Speckled
+Z. None""",
 }
 
 # ==================== Perfusion Sequence Specific System Prompts ====================
@@ -566,6 +621,27 @@ B. Mid-myocardial
 C. Subepicardial
 D. Transmural
 E. Papillary muscle
+Z. None""",
+
+    # Abnormal Segments - Multi-select
+    ("Abnormal Segments", "perfusion", True): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI (short-axis stack/slices).
+Task: Using ONLY the provided image frames, select which LV slice-level segments along the long axis show abnormal perfusion (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/Z.
+- Output letters only; use English commas.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- Evaluate abnormality across the provided time frames (wash-in as shown).
+- If no abnormal segment is visible, choose Z.
+
+Options:
+A. Basal segment
+B. Mid segment
+C. Apical segment
+D. Apex
 Z. None""",
 }
 
@@ -819,6 +895,22 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 4) Consistency: seen across frames vs isolated artifact
 5) Selected items or none""",
 
+    # Low Signal Abnormal Region
+    ("Low Signal Abnormal Region", "LGE_sax", True): """Your reason should include (image-based only):
+1) Region mapping: where the low-signal (dark) area lies around the LV myocardium
+2) Comparison: explain how it is darker than adjacent myocardium (same slice/time)
+3) Myocardial confirmation: note that it is within the myocardial wall rather than the LV cavity
+4) Consistency: whether it persists across adjacent frames/slices vs likely artifact
+5) Selected wall regions (or None)""",
+
+    # Low Signal Distribution Pattern
+    ("Low Signal Distribution Pattern", "LGE_sax", True): """Your reason should include (image-based only):
+1) Geometry: band-like vs scattered vs widespread low-signal appearance
+2) Continuity: continuous vs discontinuous low-signal areas
+3) Size/number: few large dark foci vs many small dark foci
+4) Wall-thickness impression: partial vs near full-thickness low-signal (if assessable)
+5) Selected pattern(s) (or None)""",
+
     # ==================== Perfusion Reason Templates ====================
     # Perfusion Status
     ("Perfusion Status", "perfusion", False): """Your reason should include (image-based only):
@@ -851,6 +943,14 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 3) Thickness: partial vs near full thickness
 4) Papillary muscle check (if visible)
 5) Selected layer(s) (or None)""",
+
+    # Abnormal Segments
+    ("Abnormal Segments", "perfusion", True): """Your reason should include (image-based only):
+1) Segment identification: which slice levels correspond to basal/mid/apical/apex in the provided frames
+2) Abnormal perfusion by level: where myocardium is persistently darker or enhances later than remote myocardium
+3) Long-axis distribution: which levels are involved (start/end)
+4) Temporal consistency: persists across multiple frames vs transient artifact (e.g., brief rim-like darkness)
+5) Selected segments (or None)""",
 
     # ==================== T2 Reason Templates ====================
     # T2 Signal

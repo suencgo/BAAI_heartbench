@@ -8,8 +8,8 @@
 2. **配置管理**：通过配置文件管理模型别名、API密钥等，使用更直观
 3. **智能Prompt**：针对不同序列类型和题目类型自动生成优化的prompt
    - **Cine序列**：11个字段的专门prompt templates（Thickening、Wall Motion、Systolic Function、Valves、Special Signs、Effusion等）
-   - **LGE序列**：7个字段的专门prompt templates（Enhancement Status、Abnormal Signal、High Signal分布、Special Description等）
-   - **Perfusion序列**：4个字段的专门prompt templates（Perfusion Status、Abnormal Regions、Signal Characteristics、Myocardial Layer）
+   - **LGE序列**：9个字段的专门prompt templates（Enhancement Status、Abnormal Signal、High Signal分布、Low Signal分布、Special Description等）
+   - **Perfusion序列**：5个字段的专门prompt templates（Perfusion Status、Abnormal Segments、Abnormal Regions、Signal Characteristics、Myocardial Layer）
    - **T2序列**：4个字段的专门prompt templates（T2 Signal、Abnormal Segments/Regions、Signal Distribution）
 4. **结构化Reason分析**：为每个题目类型提供5步分析框架，引导模型进行深入、有针对性的图像分析
 5. **v2设计特性**：
@@ -273,7 +273,7 @@ python batch_test_cine.py --model_alias qwen3-vl-235b --filter_sequence cine --s
 
 ### LGE序列（Late Gadolinium Enhancement）
 - `LGE_sax`: LGE序列短轴切面
-  - 支持的字段：Enhancement Status（强化状态）、Abnormal Signal（异常信号）、High Signal Abnormal Region（高信号异常分区）、High Signal Distribution Pattern（高信号分布形状）、High Signal Myocardial Layer（高信号心肌层）
+  - 支持的字段：Enhancement Status（强化状态）、Abnormal Signal（异常信号）、High Signal Abnormal Region（高信号异常分区）、High Signal Distribution Pattern（高信号分布形状）、High Signal Myocardial Layer（高信号心肌层）、Low Signal Abnormal Region（低信号异常分区）、Low Signal Distribution Pattern（低信号分布形状）
 - `LGE_4ch`: LGE序列四腔心切面
   - 支持的字段：High Signal Abnormal Segment（高信号异常节段）、Special Description（特殊描述）
 
