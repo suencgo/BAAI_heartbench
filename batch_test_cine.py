@@ -29,12 +29,15 @@ def get_patient_json_files():
 
 def test_patient_cine(json_file_path, model_alias="qwen3-vl-235b", filter_sequence="cine"):
     """Test specific sequences for a single patient"""
-    # Determine image base directory
-    # Images are referenced relative to dataset/ directory
-    # For patient_1322705_vqa_png.json in dataset/1322705/, images are like "1322705/cine_sax_1/..."
-    # For patient_51024050_vqa_png.json in dataset/, images are like "51024050/cine_sax/..."
-    # So image_base_dir should always be DATASET_DIR
-    image_base_dir = DATASET_DIR
+    # Determine image base directory based on JSON file location:
+    # - If JSON is in dataset/patient_XXX.json, images are like "XXX/cine_sax/..." -> use dataset/
+    # - If JSON is in dataset/XXX/patient_XXX.json, images are like "XXX/cine_sax_1/..." -> use dataset/XXX
+    if json_file_path.parent == DATASET_DIR:
+        # JSON file is directly in dataset/ directory
+        image_base_dir = DATASET_DIR
+    else:
+        # JSON file is in dataset/{patient_id}/ directory
+        image_base_dir = json_file_path.parent
     
     # Extract patient ID for output directory naming
     patient_id = json_file_path.stem.replace("patient_", "").replace("_vqa_png", "")
@@ -114,10 +117,10 @@ def main():
         
         if success:
             success_count += 1
-            print(f"✓ Successfully tested patient {patient_id}")
+            print(f"Successfully tested patient {patient_id}")
         else:
             failed_patients.append(patient_id)
-            print(f"✗ Error testing patient {patient_id}")
+            print(f"Error testing patient {patient_id}")
             if stderr:
                 print(f"Error output: {stderr[:500]}")  # Print first 500 chars of error
     

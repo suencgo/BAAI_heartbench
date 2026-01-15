@@ -6,11 +6,13 @@ Supports different models such as GPT and Qwen
 import os
 import base64
 import json
+import time
 from typing import List, Dict, Optional, Union
 from abc import ABC, abstractmethod
 from pathlib import Path
 import requests
 from openai import OpenAI
+from openai import RateLimitError, APIError
 
 # Optional imports for Qwen
 try:
@@ -152,25 +154,58 @@ class GPTModelAPI(BaseModelAPI):
             "content": content
         })
         
-        # Call API
-        try:
-            api_params = {
-                'model': self.model,
-                'messages': messages,
-                'temperature': kwargs.get('temperature', self.temperature)
-            }
-            # Only add max_tokens if explicitly provided
-            max_tokens_value = kwargs.get('max_tokens', self.max_tokens)
-            if max_tokens_value is not None:
-                api_params['max_tokens'] = max_tokens_value
-            
-            response = self.client.chat.completions.create(**api_params)
-            
-            return response.choices[0].message.content.strip()
+        # Call API with retry logic
+        max_retries = 3
+        retry_delay = 1  # Initial delay in seconds
         
-        except Exception as e:
-            print(f"Error calling GPT API: {e}")
-            return f"Error: {str(e)}"
+        for attempt in range(max_retries):
+            try:
+                api_params = {
+                    'model': self.model,
+                    'messages': messages,
+                    'temperature': kwargs.get('temperature', self.temperature)
+                }
+                # Only add max_tokens if explicitly provided
+                max_tokens_value = kwargs.get('max_tokens', self.max_tokens)
+                if max_tokens_value is not None:
+                    api_params['max_tokens'] = max_tokens_value
+                
+                response = self.client.chat.completions.create(**api_params)
+                
+                return response.choices[0].message.content.strip()
+            
+            except RateLimitError as e:
+                # Rate limit error - retry with exponential backoff
+                if attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)
+                    print(f"[GPT API] Rate limit exceeded (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"[GPT API ERROR] Rate limit exceeded after {max_retries} attempts")
+                    return f"Error: Rate limit exceeded - {str(e)}"
+            
+            except (APIError, Exception) as e:
+                # Other API errors or general exceptions - retry with exponential backoff
+                error_type = type(e).__name__
+                is_retryable = (
+                    error_type in ['APIConnectionError', 'APITimeoutError', 'InternalServerError'] or
+                    (hasattr(e, 'status_code') and e.status_code in [429, 500, 502, 503, 504])
+                )
+                
+                if is_retryable and attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)
+                    print(f"[GPT API] {error_type} (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"[GPT API ERROR] {error_type}: {str(e)}")
+                    if attempt == max_retries - 1:
+                        print(f"[GPT API ERROR] Failed after {max_retries} attempts")
+                    return f"Error: {str(e)}"
+        
+        # Should not reach here, but just in case
+        return "Error: Max retries exceeded"
 
 # ==================== Ksyun API Interface ====================
 class KsyunModelAPI(BaseModelAPI):
@@ -305,96 +340,75 @@ class KsyunModelAPI(BaseModelAPI):
             "content": user_content
         })
         
-        # Call API
-        try:
-            print(f"[Ksyun API] Preparing API call...")
-            print(f"[Ksyun API] Model: {self.model}")
-            print(f"[Ksyun API] Base URL: {self.base_url}")
-            print(f"[Ksyun API] Number of messages: {len(messages)}")
-            print(f"[Ksyun API] Number of images: {len([c for c in user_content if c.get('type') == 'image_url'])}")
-            print(f"[Ksyun API] Temperature: {kwargs.get('temperature', self.temperature)}")
-            
-            # Prepare API call parameters (no max_tokens limit)
-            api_params = {
-                'model': self.model,
-                'messages': messages,
-                'temperature': kwargs.get('temperature', self.temperature)
-            }
-            # Only add max_tokens if explicitly provided in kwargs
-            if 'max_tokens' in kwargs and kwargs['max_tokens'] is not None:
-                api_params['max_tokens'] = kwargs['max_tokens']
-                print(f"[Ksyun API] Max tokens: {kwargs['max_tokens']}")
-            else:
-                print(f"[Ksyun API] Max tokens: None (unlimited)")
-            
-            response = self.client.chat.completions.create(**api_params)
-            
-            print(f"[Ksyun API] API call successful")
-            print(f"[Ksyun API] Response object type: {type(response)}")
-            if hasattr(response, 'choices') and len(response.choices) > 0:
-                choice = response.choices[0]
-                print(f"[Ksyun API] Choice object: {choice}")
-                print(f"[Ksyun API] Finish reason: {getattr(choice, 'finish_reason', 'N/A')}")
-                
-                message = choice.message
-                print(f"[Ksyun API] Message object: {message}")
-                print(f"[Ksyun API] Message type: {type(message)}")
-                print(f"[Ksyun API] Message attributes: {[attr for attr in dir(message) if not attr.startswith('_')]}")
-                
-                content = message.content
-                print(f"[Ksyun API] Content type: {type(content)}")
-                print(f"[Ksyun API] Content value: {repr(content)}")
-                print(f"[Ksyun API] Response content length: {len(content) if content else 0}")
-                
-                # Check for other fields that might contain content
-                if hasattr(message, 'role'):
-                    print(f"[Ksyun API] Message role: {message.role}")
-                
-                # Check full response object
-                print(f"[Ksyun API] Response ID: {getattr(response, 'id', 'N/A')}")
-                print(f"[Ksyun API] Response model: {getattr(response, 'model', 'N/A')}")
-                print(f"[Ksyun API] Response usage: {getattr(response, 'usage', 'N/A')}")
-                
-                if content:
-                    print(f"[Ksyun API] Response preview: {content[:200]}...")
-                    return content.strip()
-                else:
-                    print(f"[Ksyun API] WARNING: Response content is empty!")
-                    print(f"[Ksyun API] Attempting to get content from message dict...")
-                    # Try to get from dict form
-                    if isinstance(message, dict):
-                        content = message.get('content', '')
-                    elif hasattr(message, '__dict__'):
-                        print(f"[Ksyun API] Message __dict__: {message.__dict__}")
-                        content = message.__dict__.get('content', '')
-                    return content.strip() if content else ""
-            else:
-                print(f"[Ksyun API] WARNING: No choices in response!")
-                print(f"[Ksyun API] Response structure: {[attr for attr in dir(response) if not attr.startswith('_')]}")
-                if hasattr(response, 'choices'):
-                    print(f"[Ksyun API] Choices length: {len(response.choices)}")
-                return ""
+        # Call API with retry logic
+        max_retries = 3
+        retry_delay = 1  # Initial delay in seconds
         
-        except Exception as e:
-            print(f"[Ksyun API ERROR] Exception type: {type(e).__name__}")
-            print(f"[Ksyun API ERROR] Error message: {e}")
-            print(f"[Ksyun API ERROR] Model: {self.model}")
-            print(f"[Ksyun API ERROR] Base URL: {self.base_url}")
-            print(f"[Ksyun API ERROR] Messages structure: {len(messages)} message(s)")
-            if messages:
-                print(f"[Ksyun API ERROR] First message role: {messages[0].get('role', 'N/A')}")
-                if 'content' in messages[0]:
-                    content = messages[0]['content']
-                    if isinstance(content, list):
-                        print(f"[Ksyun API ERROR] First message content: {len(content)} items")
-                        for i, item in enumerate(content[:3]):
-                            if isinstance(item, dict):
-                                if 'type' in item:
-                                    print(f"[Ksyun API ERROR]   Item {i}: type={item['type']}")
-            import traceback
-            print(f"[Ksyun API ERROR] Full traceback:")
-            traceback.print_exc()
-            return f"Error: {str(e)}"
+        for attempt in range(max_retries):
+            try:
+                # Prepare API call parameters (no max_tokens limit)
+                api_params = {
+                    'model': self.model,
+                    'messages': messages,
+                    'temperature': kwargs.get('temperature', self.temperature)
+                }
+                # Only add max_tokens if explicitly provided in kwargs
+                if 'max_tokens' in kwargs and kwargs['max_tokens'] is not None:
+                    api_params['max_tokens'] = kwargs['max_tokens']
+                
+                response = self.client.chat.completions.create(**api_params)
+                
+                if hasattr(response, 'choices') and len(response.choices) > 0:
+                    choice = response.choices[0]
+                    message = choice.message
+                    content = message.content
+                    
+                    if content:
+                        return content.strip()
+                    else:
+                        # Try to get from dict form
+                        if isinstance(message, dict):
+                            content = message.get('content', '')
+                        elif hasattr(message, '__dict__'):
+                            content = message.__dict__.get('content', '')
+                        return content.strip() if content else ""
+                else:
+                    print(f"[Ksyun API ERROR] No choices in response!")
+                    return ""
+            
+            except RateLimitError as e:
+                # Rate limit error - retry with exponential backoff
+                if attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                    print(f"[Ksyun API] Rate limit exceeded (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"[Ksyun API ERROR] Rate limit exceeded after {max_retries} attempts")
+                    return f"Error: Rate limit exceeded - {str(e)}"
+            
+            except (APIError, Exception) as e:
+                # Other API errors or general exceptions - retry with exponential backoff
+                error_type = type(e).__name__
+                is_retryable = (
+                    error_type in ['APIConnectionError', 'APITimeoutError', 'InternalServerError'] or
+                    (hasattr(e, 'status_code') and e.status_code in [429, 500, 502, 503, 504])
+                )
+                
+                if is_retryable and attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)
+                    print(f"[Ksyun API] {error_type} (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    # Non-retryable error or max retries reached
+                    print(f"[Ksyun API ERROR] {error_type}: {str(e)}")
+                    if attempt == max_retries - 1:
+                        print(f"[Ksyun API ERROR] Failed after {max_retries} attempts")
+                    return f"Error: {str(e)}"
+        
+        # Should not reach here, but just in case
+        return "Error: Max retries exceeded"
 
 # ==================== Qwen API Interface ====================
 class QwenModelAPI(BaseModelAPI):
@@ -469,46 +483,75 @@ class QwenModelAPI(BaseModelAPI):
                 "content": content_list
             })
         
-        # Call API
-        try:
-            api_params = {
-                'model': self.model,
-                'messages': messages,
-                'temperature': kwargs.get('temperature', self.temperature)
-            }
-            # Only add max_tokens if explicitly provided
-            max_tokens_value = kwargs.get('max_tokens', self.max_tokens)
-            if max_tokens_value is not None:
-                api_params['max_tokens'] = max_tokens_value
-            
-            response = MultiModalConversation.call(**api_params)
-            
-            if response.status_code == 200:
-                # Extract text content
-                if hasattr(response, 'output') and hasattr(response.output, 'choices'):
-                    content = response.output.choices[0].message.content
-                    # content may be list or string
-                    if isinstance(content, list):
-                        # Find text type content
-                        for item in content:
-                            if isinstance(item, dict) and item.get('type') == 'text':
-                                return item.get('text', '').strip()
-                        # If text not found, try to get first element directly
-                        if content:
-                            return str(content[0]).strip()
-                    elif isinstance(content, str):
-                        return content.strip()
-                return "Error: Unable to parse response"
-            else:
-                error_msg = getattr(response, 'message', 'Unknown error')
-                print(f"Qwen API Error: {error_msg}")
-                return f"Error: {error_msg}"
+        # Call API with retry logic
+        max_retries = 3
+        retry_delay = 1  # Initial delay in seconds
         
-        except Exception as e:
-            print(f"Error calling Qwen API: {e}")
-            import traceback
-            traceback.print_exc()
-            return f"Error: {str(e)}"
+        for attempt in range(max_retries):
+            try:
+                api_params = {
+                    'model': self.model,
+                    'messages': messages,
+                    'temperature': kwargs.get('temperature', self.temperature)
+                }
+                # Only add max_tokens if explicitly provided
+                max_tokens_value = kwargs.get('max_tokens', self.max_tokens)
+                if max_tokens_value is not None:
+                    api_params['max_tokens'] = max_tokens_value
+                
+                response = MultiModalConversation.call(**api_params)
+                
+                if response.status_code == 200:
+                    # Extract text content
+                    if hasattr(response, 'output') and hasattr(response.output, 'choices'):
+                        content = response.output.choices[0].message.content
+                        # content may be list or string
+                        if isinstance(content, list):
+                            # Find text type content
+                            for item in content:
+                                if isinstance(item, dict) and item.get('type') == 'text':
+                                    return item.get('text', '').strip()
+                            # If text not found, try to get first element directly
+                            if content:
+                                return str(content[0]).strip()
+                        elif isinstance(content, str):
+                            return content.strip()
+                    return "Error: Unable to parse response"
+                else:
+                    # Check if error is retryable
+                    error_msg = getattr(response, 'message', 'Unknown error')
+                    status_code = getattr(response, 'status_code', None)
+                    is_retryable = status_code in [429, 500, 502, 503, 504]
+                    
+                    if is_retryable and attempt < max_retries - 1:
+                        wait_time = retry_delay * (2 ** attempt)
+                        print(f"[Qwen API] Error {status_code} (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print(f"[Qwen API ERROR] {error_msg}")
+                        return f"Error: {error_msg}"
+            
+            except Exception as e:
+                error_type = type(e).__name__
+                is_retryable = (
+                    error_type in ['ConnectionError', 'TimeoutError', 'HTTPError'] or
+                    (hasattr(e, 'status_code') and e.status_code in [429, 500, 502, 503, 504])
+                )
+                
+                if is_retryable and attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)
+                    print(f"[Qwen API] {error_type} (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"[Qwen API ERROR] {error_type}: {str(e)}")
+                    if attempt == max_retries - 1:
+                        print(f"[Qwen API ERROR] Failed after {max_retries} attempts")
+                    return f"Error: {str(e)}"
+        
+        # Should not reach here, but just in case
+        return "Error: Max retries exceeded"
 
 # ==================== Model Factory ====================
 class ModelFactory:

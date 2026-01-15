@@ -28,7 +28,7 @@ def example_with_config():
         model_alias="qwen3-vl-235b",
         config_manager=config_manager
     )
-    print(f"✓ 模型创建成功: {type(model).__name__}")
+    print(f"模型创建成功: {type(model).__name__}")
     
     # 方式2: 覆盖API key
     print("\n方式2: 使用模型别名并覆盖API key")
@@ -37,7 +37,7 @@ def example_with_config():
         config_manager=config_manager,
         api_key="your-custom-api-key"  # 会覆盖配置文件中的API key
     )
-    print(f"✓ 模型创建成功（使用自定义API key）")
+    print(f"模型创建成功（使用自定义API key）")
     
     # 方式3: 添加新模型配置
     print("\n方式3: 添加新模型配置")
@@ -50,14 +50,14 @@ def example_with_config():
         "temperature": 0.1,
         "description": "我的自定义模型"
     })
-    print("✓ 新模型配置已添加")
+    print("新模型配置已添加")
     
     # 使用新添加的模型
     custom_model = ModelFactory.create_model(
         model_alias="my-custom-model",
         config_manager=config_manager
     )
-    print(f"✓ 自定义模型创建成功: {type(custom_model).__name__}")
+    print(f"自定义模型创建成功: {type(custom_model).__name__}")
     
     # 方式4: 在评估中使用
     print("\n方式4: 在评估中使用模型别名")

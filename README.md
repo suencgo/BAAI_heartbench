@@ -19,9 +19,12 @@
    - 操作性的视觉定义（特别是灌注的Reduced/Delayed/Defect）
 6. **序列过滤**：支持通过 `--filter_sequence` 参数过滤特定序列类型的题目（如只测试cine序列）
 7. **批量测试**：提供 `batch_test_cine.py` 脚本，可自动批量测试所有病人的特定序列
-8. **灵活评估**：支持规则评估和Judge模型评估两种方式
-9. **详细报告**：生成JSON和TSV格式的详细评估报告，包含答案推理原因
-10. **评估指标**：支持准确率（accuracy）和多选题命中率（hit）指标
+8. **高并发处理**：支持多线程并发处理，大幅提升评估速度（通过 `--max_workers` 参数控制并发数）
+9. **自动重试机制**：API调用失败时自动重试（最多3次），使用指数退避策略，有效处理限流和临时错误
+10. **灵活评估**：支持规则评估和Judge模型评估两种方式
+11. **详细报告**：生成JSON和TSV格式的详细评估报告，包含答案推理原因
+12. **评估指标**：支持准确率（accuracy）和多选题命中率（hit）指标
+13. **环境管理**：提供 Conda 和 venv 两种环境设置方式，包含环境检查脚本
 
 ## 文件结构
 
@@ -39,16 +42,83 @@ Heart_bench/
 ├── model_config.json       # 模型配置文件
 ├── requirements.txt        # 依赖包
 ├── README.md              # 详细文档
-├── QUICKSTART.md          # 快速开始指南
+├── QUICK_START.md         # 快速开始指南
+├── SETUP.md               # 环境设置详细说明
+├── check_environment.py  # 环境检查脚本
+├── environment.yml        # Conda环境配置文件
+├── setup_conda.sh         # Conda环境设置脚本
+├── setup_venv.sh         # venv环境设置脚本
 └── .gitignore            # Git忽略文件
 ```
 
 ## 安装依赖
 
+### 方式1：使用 Conda（推荐）
+
+使用 conda 创建独立环境，避免依赖冲突：
+
+```bash
+cd Heart_bench
+
+# 创建 conda 环境（从 environment.yml）
+conda env create -f environment.yml
+
+# 激活环境
+conda activate heart_bench
+
+# 验证安装
+python -c "import openai, dashscope; print('Dependencies installed successfully!')"
+```
+
+或者手动创建环境：
+
+```bash
+# 创建新的 conda 环境（Python 3.10）
+conda create -n heart_bench python=3.10 -y
+
+# 激活环境
+conda activate heart_bench
+
+# 安装依赖
+pip install -r requirements.txt
+```
+
+### 方式2：使用 pip（传统方式）
+
 ```bash
 cd Heart_bench
 pip install -r requirements.txt
 ```
+
+### 环境管理
+
+```bash
+# 激活环境
+conda activate heart_bench
+
+# 退出环境
+conda deactivate
+
+# 删除环境（如果需要）
+conda env remove -n heart_bench
+
+# 查看所有环境
+conda env list
+```
+
+### 验证环境
+
+创建环境后，可以运行检查脚本验证配置：
+
+```bash
+# 激活环境
+conda activate heart_bench
+
+# 运行环境检查
+python check_environment.py
+```
+
+更多详细的环境设置说明请参考 [SETUP.md](SETUP.md)
 
 ## 配置模型
 
@@ -141,6 +211,32 @@ python evaluate_benchmark.py \
     --judge_model_alias qwen3-vl-235b
 ```
 
+### 使用高并发处理（推荐用于大量题目）
+
+使用 `--max_workers` 参数可以启用多线程并发处理，大幅提升评估速度：
+
+```bash
+# 使用 4 个并发线程
+python evaluate_benchmark.py \
+    --json_path ../dataset/patient_1322705_vqa_png.json \
+    --image_base_dir ../dataset \
+    --test_model_alias qwen3-vl-235b \
+    --max_workers 4
+
+# 使用 8 个并发线程（适合API配额充足的情况）
+python evaluate_benchmark.py \
+    --json_path ../dataset/patient_1322705_vqa_png.json \
+    --image_base_dir ../dataset \
+    --test_model_alias qwen3-vl-235b \
+    --max_workers 8
+```
+
+**注意事项**：
+- 并发数建议设置为 2-8，具体取决于API的速率限制和配额
+- 过高的并发数可能导致API限流或错误率增加
+- 并发处理时，结果会实时保存，支持断点续传（`--resume`）
+- 每个线程独立处理一个问题，线程安全已保证
+
 ### 指定输出格式
 
 ```bash
@@ -185,6 +281,28 @@ python evaluate_benchmark.py \
     --filter_sequence T2
 ```
 
+### 测试单个病人的所有题目
+
+使用 `test_single_patient.py` 脚本可以测试单个病人的所有题目，并自动检查潜在bug：
+
+```bash
+# 测试病人 1322705 的所有题目
+cd Heart_bench
+python test_single_patient.py --patient_id 1322705 --model_alias qwen3-vl-235b
+
+# 使用并发处理（4个线程）
+python test_single_patient.py --patient_id 1322705 --model_alias qwen3-vl-235b --max_workers 4
+
+# 使用传统方式指定模型
+python test_single_patient.py --patient_id 1322705 --model_type gpt --model_name gpt-4o
+```
+
+测试脚本会自动：
+- 加载指定病人的所有题目
+- 显示题目统计（按序列、字段、类型分组）
+- 执行评估并保存结果
+- 检查潜在bug（空答案、缺失reason、不一致的accuracy等）
+
 ### 批量测试所有病人的特定序列（推荐）
 
 使用 `batch_test_cine.py` 脚本可以自动批量测试所有病人的特定序列：
@@ -228,6 +346,8 @@ python batch_test_cine.py --model_alias qwen3-vl-235b --filter_sequence cine --s
 - `--config_path`: 配置文件路径（默认：`Heart_bench/model_config.json`）
 - `--include_reason`: 是否要求模型输出推理原因（默认：True）
 - `--filter_sequence`: 过滤特定序列类型（如 `cine`、`LGE`、`perfusion`、`T2`），只测试匹配的题目
+- `--max_workers`: 最大并发工作线程数（默认：1，顺序处理）。设置为大于1的值可启用并发处理，显著提升评估速度
+- `--resume`: 从已有结果恢复评估（跳过已完成的题目）
 
 ### 模型配置参数（二选一）
 
@@ -460,7 +580,7 @@ When providing your reason, please follow this analysis framework:
 
 ## 注意事项
 
-1. **图片路径**：确保JSON中的图片路径正确，且相对于`image_base_dir`
+1. **图片路径**：确保JSON中的图片路径正确，且相对于`image_base_dir`。代码会自动处理嵌套和扁平两种目录结构
 2. **API配额**：评估大量题目会消耗API配额，建议先用少量题目测试
 3. **多图片输入**：每个问题可能包含多张图片（多个slice），模型需要支持多图输入
 4. **Judge模型**：使用Judge模型会增加API调用成本，但评估更准确
@@ -469,10 +589,13 @@ When providing your reason, please follow this analysis framework:
 7. **序列过滤**：使用 `--filter_sequence` 参数时，过滤是基于 `sequence_view` 字段的字符串匹配（不区分大小写），例如 `cine` 会匹配 `cine_sax`、`cine_4ch`、`cine_3ch` 等
 8. **批量测试**：批量测试脚本会自动查找所有 `patient_*_vqa_png.json` 文件，确保数据文件命名符合规范
 9. **Prompt Templates**：框架会自动为支持的序列和字段选择对应的prompt template，如果字段不匹配，会使用通用prompt
-10. **Reason输出**：使用`--include_reason`时，模型会被要求按照reason template的框架进行分析，输出更结构化的推理过程
+10. **Reason输出**：使用`--include_reason`时，模型会被要求按照reason template的框架进行分析，输出更结构化的推理过程。CINE序列的prompt会自动调整以支持reason输出
+11. **API重试**：当遇到429限流错误或其他临时错误时，系统会自动重试（最多3次），使用指数退避策略（1s, 2s, 4s）
+12. **并发控制**：使用`--max_workers`时，建议设置为2-8，具体取决于API的速率限制。过高的并发可能导致限流
 
 ## 更多信息
 
-- 快速开始指南请参考 [QUICKSTART.md](QUICKSTART.md)
+- 快速开始指南请参考 [QUICK_START.md](QUICK_START.md)
+- 环境设置详细说明请参考 [SETUP.md](SETUP.md)
 - 配置管理示例请参考 [example_config.py](example_config.py)
 - 使用示例请参考 [example_usage.py](example_usage.py)

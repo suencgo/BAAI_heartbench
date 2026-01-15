@@ -6,6 +6,7 @@ Supports dynamic prompt generation for different sequence types and question typ
 from typing import Dict, List, Optional
 from enum import Enum
 import json
+import re
 
 class QuestionType(Enum):
     """Question type"""
@@ -65,7 +66,7 @@ SEQUENCE_DESCRIPTIONS = {
 # ==================== Cine Sequence Specific System Prompts ====================
 CINE_SPECIFIC_PROMPTS = {
     # Thickening (LV Wall Thickness) - Multi-select
-    ("Thickening", "cine_sax", True): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided image frames, answer the LV wall thickness characteristic (multi-select).
+    ("Thickening", "cine_sax", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided image frames, answer the LV wall thickness characteristic (multi-select).
 
 Strict rules:
 
@@ -92,7 +93,7 @@ D. Thickened
 E. Bulging""",
 
     # Wall Motion Coordination - Single-choice
-    ("Wall Motion Coordination", "cine_4ch", False): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, decide whether LV wall segments move synchronously (single-choice).
+    ("Wall Motion Coordination", "cine_4ch", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, decide whether LV wall segments move synchronously (single-choice).
 
 Strict rules:
 
@@ -113,7 +114,7 @@ A. Coordinated
 B. Uncoordinated""",
 
     # Wall Motion Amplitude - Multi-select
-    ("Wall Motion Amplitude", "cine_4ch", True): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, determine the LV wall motion amplitude pattern (multi-select).
+    ("Wall Motion Amplitude", "cine_4ch", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, determine the LV wall motion amplitude pattern (multi-select).
 
 Strict rules:
 
@@ -140,7 +141,7 @@ D. Paradoxical motion
 E. Enhanced""",
 
     # Systolic Function - Single-choice
-    ("Systolic Function", "cine_4ch", False): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, assess LV systolic function (single-choice).
+    ("Systolic Function", "cine_4ch", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, assess LV systolic function (single-choice).
 
 Strict rules:
 
@@ -163,7 +164,7 @@ B. Reduced
 C. Enhanced""",
 
     # Diastolic Function - Single-choice
-    ("Diastolic Function", "cine_4ch", False): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, decide LV diastolic function (single-choice).
+    ("Diastolic Function", "cine_4ch", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, decide LV diastolic function (single-choice).
 
 Strict rules:
 
@@ -184,7 +185,7 @@ A. Normal
 B. Restrictive (impaired)""",
 
     # Mitral Regurgitation - Single-choice
-    ("Mitral Regurgitation", "cine_4ch", False): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, determine whether mitral regurgitation is present (single-choice).
+    ("Mitral Regurgitation", "cine_4ch", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, determine whether mitral regurgitation is present (single-choice).
 
 Strict rules:
 
@@ -205,7 +206,7 @@ A. Regurgitation
 B. No regurgitation""",
 
     # Tricuspid Regurgitation - Single-choice
-    ("Tricuspid Regurgitation", "cine_4ch", False): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, determine whether tricuspid regurgitation is present (single-choice).
+    ("Tricuspid Regurgitation", "cine_4ch", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, determine whether tricuspid regurgitation is present (single-choice).
 
 Strict rules:
 
@@ -226,7 +227,7 @@ A. Regurgitation
 B. No regurgitation""",
 
     # Aortic Regurgitation - Single-choice
-    ("Aortic Regurgitation", "cine_3ch", False): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, determine whether aortic regurgitation is present (single-choice).
+    ("Aortic Regurgitation", "cine_3ch", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, determine whether aortic regurgitation is present (single-choice).
 
 Strict rules:
 
@@ -247,7 +248,7 @@ A. Regurgitation
 B. No regurgitation""",
 
     # Special Signs - Multi-select
-    ("Special Signs", "cine_3ch", True): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, select which special signs are present (multi-select).
+    ("Special Signs", "cine_3ch", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, select which special signs are present (multi-select).
 
 Strict rules:
 
@@ -278,7 +279,7 @@ E. Pulmonary artery dilatation
 F. No special signs present""",
 
     # Pericardial Effusion - Single-choice
-    ("Pericardial Effusion", "cine_4ch", False): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, determine whether pericardial effusion is present (single-choice).
+    ("Pericardial Effusion", "cine_4ch", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, determine whether pericardial effusion is present (single-choice).
 
 Strict rules:
 
@@ -299,7 +300,7 @@ A. Yes (effusion present)
 B. No (effusion absent)""",
 
     # Pleural Effusion - Single-choice
-    ("Pleural Effusion", "cine_4ch", False): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, determine whether pleural effusion is present (single-choice).
+    ("Pleural Effusion", "cine_4ch", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac cine MRI. Task: using ONLY the provided frames, determine whether pleural effusion is present (single-choice).
 
 Strict rules:
 
@@ -323,7 +324,7 @@ B. No (effusion absent)""",
 # ==================== LGE Sequence Specific System Prompts ====================
 LGE_SPECIFIC_PROMPTS = {
     # Enhancement Status - Single-choice
-    ("Enhancement Status", "LGE_sax", False): """You are a Vision-Language Model (VLM) for cardiac LGE MRI.
+    ("Enhancement Status", "LGE_sax", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac LGE MRI.
 Task: Using ONLY the provided image frames, decide whether abnormal delayed enhancement is present (single-choice).
 
 Strict rules:
@@ -339,7 +340,7 @@ A. No Abnormal Delayed Enhancement
 B. Abnormal Delayed Enhancement""",
 
     # Abnormal Signal - Single-choice
-    ("Abnormal Signal", "LGE_sax", False): """You are a Vision-Language Model (VLM) for cardiac LGE MRI.
+    ("Abnormal Signal", "LGE_sax", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac LGE MRI.
 Task: Using ONLY the provided image frames, classify the signal appearance of the abnormal enhancement (single-choice).
 
 Strict rules:
@@ -359,11 +360,11 @@ A. High Signal
 B. Mixed Signal""",
 
     # High Signal Abnormal Segment - Multi-select
-    ("High Signal Abnormal Segment", "LGE_4ch", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (4-chamber view).
+    ("High Signal Abnormal Segment", "LGE_4ch", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (4-chamber view).
 Task: Using ONLY the provided image frames, select which long-axis segments show high-signal abnormal enhancement (multi-select).
 
 Strict rules:
-- Select one or more from A/B/C/D/Z.
+- Select one or more from A/B/C/D/E/Z.
 - Output letters only; use English commas for multiple selections (e.g., B or C,D or Z).
 - Output format:
   - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
@@ -376,10 +377,11 @@ A. Basal Segment
 B. Mid Segment
 C. Apical Segment
 D. Apex
+E. Papillary Muscle
 Z. None""",
 
     # High Signal Abnormal Region - Multi-select
-    ("High Signal Abnormal Region", "LGE_sax", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
+    ("High Signal Abnormal Region", "LGE_sax", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
 Task: Using ONLY the provided image frames, select which LV wall regions show high-signal abnormal enhancement (multi-select).
 
 Strict rules:
@@ -401,7 +403,7 @@ F. Anterolateral Wall
 Z. None""",
 
     # High Signal Distribution Pattern - Multi-select
-    ("High Signal Distribution Pattern", "LGE_sax", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
+    ("High Signal Distribution Pattern", "LGE_sax", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
 Task: Using ONLY the provided image frames, select the distribution pattern(s) of high-signal enhancement (multi-select).
 
 Strict rules:
@@ -429,7 +431,7 @@ E. Speckled
 Z. None""",
 
     # High Signal Myocardial Layer - Multi-select
-    ("High Signal Myocardial Layer", "LGE_sax", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
+    ("High Signal Myocardial Layer", "LGE_sax", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
 Task: Using ONLY the provided image frames, select which myocardial layer(s) show high-signal enhancement (multi-select).
 
 Strict rules:
@@ -457,7 +459,7 @@ E. Papillary Muscle
 Z. None""",
 
     # Special Description - Multi-select
-    ("Special Description", "LGE_4ch", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (4-chamber view).
+    ("Special Description", "LGE_4ch", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (4-chamber view).
 Task: Using ONLY the provided image frames, select any special visible features (multi-select).
 
 Strict rules:
@@ -476,7 +478,7 @@ C. High Signal at Ventricular Septal Insertion Point
 D. High Signal in Right Ventricle""",
 
     # Low Signal Abnormal Region - Multi-select
-    ("Low Signal Abnormal Region", "LGE_sax", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
+    ("Low Signal Abnormal Region", "LGE_sax", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
 Task: Using ONLY the provided image frames, select which LV wall regions show a myocardial low-signal abnormality (hypoenhanced / darker-than-expected area) on LGE (multi-select).
 
 Strict rules:
@@ -502,7 +504,7 @@ F. Anterolateral Wall
 Z. None""",
 
     # Low Signal Distribution Pattern - Multi-select
-    ("Low Signal Distribution Pattern", "LGE_sax", True): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
+    ("Low Signal Distribution Pattern", "LGE_sax", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
 Task: Using ONLY the provided image frames, select the distribution pattern(s) of myocardial low-signal abnormality (hypoenhanced / darker-than-expected area) on LGE (multi-select).
 
 Strict rules:
@@ -529,12 +531,69 @@ C. Patchy
 D. Transmural
 E. Speckled
 Z. None""",
+
+    # Low Signal Abnormal Segment - Multi-select
+    ("Low Signal Abnormal Segment", "LGE_sax", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis stack/slices).
+Task: Using ONLY the provided image frames, select which LV slice-level segments along the long axis show a myocardial low-signal abnormality (hypoenhanced / darker-than-expected area) on LGE (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/E/Z.
+- Output letters only; use English commas for multiple selections.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- Only label findings that are visually located within the myocardium or papillary muscles (exclude LV cavity/blood pool darkness).
+- Operational criteria (image-only):
+  1) The area is clearly darker than adjacent myocardium in the same frame/slice, AND
+  2) The location/shape is consistent across adjacent frames/slices if available (not a single-frame artifact).
+- If no clear myocardial low-signal abnormality is visible, choose Z.
+
+Options:
+A. Basal Segment
+B. Mid Segment
+C. Apical Segment
+D. Apex
+E. Papillary Muscle
+Z. None""",
+
+    # Low Signal Myocardial Layer - Multi-select
+    ("Low Signal Myocardial Layer", "LGE_sax", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac LGE MRI (short-axis view).
+Task: Using ONLY the provided image frames, select which myocardial layer(s) show a myocardial low-signal abnormality (hypoenhanced / darker-than-expected area) on LGE (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/E/Z.
+- Output letters only; use English commas.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- Only label findings that are visually within the myocardium or papillary muscles (exclude LV cavity/blood pool darkness).
+- Operational criteria (image-only):
+  1) The low-signal area is clearly darker than adjacent myocardium in the same slice/frame, AND
+  2) The location/shape is consistent across adjacent frames/slices if available (not a single-frame artifact).
+- If no clear myocardial low-signal abnormality is visible, choose Z.
+
+Operational layer definitions (visual):
+- Subendocardial: low-signal adjacent to the endocardial border.
+- Mid-myocardial: low-signal centered within wall thickness.
+- Subepicardial: low-signal adjacent to the epicardial surface.
+- Transmural: low-signal spans most or nearly all wall thickness locally.
+- Papillary Muscle: low-signal within papillary muscle structure (if clearly visible).
+
+Options:
+A. Subendocardial
+B. Mid-myocardial
+C. Transmural
+D. Subepicardial
+E. Papillary Muscle
+Z. None""",
 }
 
 # ==================== Perfusion Sequence Specific System Prompts ====================
 PERFUSION_SPECIFIC_PROMPTS = {
     # Perfusion Status - Single-choice
-    ("Perfusion Status", "perfusion", False): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI.
+    ("Perfusion Status", "perfusion", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI.
 Task: Using ONLY the provided image frames, decide whether myocardial perfusion appears normal or abnormal (single-choice).
 
 Strict rules:
@@ -551,7 +610,7 @@ A. Normal
 B. Abnormal""",
 
     # Abnormal Regions - Multi-select
-    ("Abnormal Regions", "perfusion", True): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI (short-axis view).
+    ("Abnormal Regions", "perfusion", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI (short-axis view).
 Task: Using ONLY the provided image frames, select which LV wall regions show abnormal perfusion (multi-select).
 
 Strict rules:
@@ -573,7 +632,7 @@ F. Anterolateral wall
 Z. None""",
 
     # Perfusion Abnormality Signal Characteristics - Single-choice
-    ("Perfusion Abnormality Signal Characteristics", "perfusion", False): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI.
+    ("Perfusion Abnormality Signal Characteristics", "perfusion", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI.
 Task: Using ONLY the provided image frames, classify the visual type of perfusion abnormality (single-choice).
 
 Strict rules:
@@ -596,7 +655,7 @@ B. Delayed perfusion
 C. Perfusion defect""",
 
     # Myocardial Layer - Multi-select
-    ("Myocardial Layer", "perfusion", True): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI (short-axis view).
+    ("Myocardial Layer", "perfusion", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI (short-axis view).
 Task: Using ONLY the provided image frames, select which myocardial layers show perfusion abnormalities (multi-select).
 
 Strict rules:
@@ -624,7 +683,7 @@ E. Papillary muscle
 Z. None""",
 
     # Abnormal Segments - Multi-select
-    ("Abnormal Segments", "perfusion", True): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI (short-axis stack/slices).
+    ("Abnormal Segments", "perfusion", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac first-pass perfusion MRI (short-axis stack/slices).
 Task: Using ONLY the provided image frames, select which LV slice-level segments along the long axis show abnormal perfusion (multi-select).
 
 Strict rules:
@@ -648,7 +707,7 @@ Z. None""",
 # ==================== T2 Sequence Specific System Prompts ====================
 T2_SPECIFIC_PROMPTS = {
     # T2 Signal - Single-choice
-    ("T2 Signal", "T2_sax", False): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
+    ("T2 Signal", "T2_sax", False, "prompt"): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
 Task: Using ONLY the provided image frames, classify the overall myocardial T2 signal appearance (single-choice).
 
 Strict rules:
@@ -666,7 +725,7 @@ C. Low Signal
 D. Mixed Signal""",
 
     # Abnormal Segments - Multi-select
-    ("Abnormal Segments", "T2_sax", True): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
+    ("Abnormal Segments", "T2_sax", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
 Task: Using ONLY the provided image frames, select which LV segments show abnormal T2 signal (multi-select).
 
 Strict rules:
@@ -686,7 +745,7 @@ D. Apex
 Z. None""",
 
     # Abnormal Regions - Multi-select
-    ("Abnormal Regions", "T2_sax", True): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
+    ("Abnormal Regions", "T2_sax", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
 Task: Using ONLY the provided image frames, select which LV wall regions show abnormal T2 signal (multi-select).
 
 Strict rules:
@@ -708,7 +767,7 @@ F. Anterolateral wall
 Z. None""",
 
     # Signal Distribution Pattern - Multi-select
-    ("Signal Distribution", "T2_sax", True): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
+    ("Signal Distribution", "T2_sax", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
 Task: Using ONLY the provided image frames, select the distribution pattern(s) of abnormal T2 signal (multi-select).
 
 Strict rules:
@@ -734,12 +793,41 @@ C. Patchy
 D. Transmural
 E. Speckled
 Z. None""",
+
+    # Myocardial Layer - Multi-select
+    ("Myocardial Layer", "T2_sax", True, "prompt"): """You are a Vision-Language Model (VLM) for cardiac T2-weighted MRI (short-axis view).
+Task: Using ONLY the provided image frames, select which myocardial layer(s) show abnormal T2 signal (multi-select).
+
+Strict rules:
+- Select one or more from A/B/C/D/E/Z.
+- Output letters only; use English commas for multiple selections.
+- Output format:
+  - If include_reason=True: Line 1 = letters; Line 2 = "Reason: ..."
+  - Else: Line 1 = letters only
+- Use images only; do not use external knowledge.
+- Abnormal T2 signal can be higher or lower than adjacent myocardium; base your choice on visible contrast.
+- If no clear abnormal myocardial T2 signal is visible, choose Z.
+
+Operational layer definitions (visual):
+- Subendocardial: abnormal signal adjacent to the endocardial border.
+- Mid-myocardial: abnormal signal centered within wall thickness.
+- Subepicardial: abnormal signal adjacent to the epicardial surface.
+- Transmural: abnormal signal spans most or nearly all wall thickness locally.
+- Papillary Muscle: abnormal signal within papillary muscle structure (if clearly visible).
+
+Options:
+A. Subendocardial
+B. Mid-myocardial
+C. Subepicardial
+D. Transmural
+E. Papillary Muscle
+Z. None""",
 }
 
 # ==================== Reason Analysis Templates ====================
 REASON_TEMPLATES = {
     # Thickening (LV Wall Thickness)
-    ("Thickening", "cine_sax", True): """Your reason should include:
+    ("Thickening", "cine_sax", True, "reason"): """Your reason should include:
 1. **Wall thickness assessment**: Describe the overall thickness of the LV myocardium across different segments (anterior, inferior, septal, lateral)
 2. **Uniformity analysis**: Note whether thickness is uniform or heterogeneous across segments
 3. **Specific observations**: Identify any segments showing thinning, thickening, or bulging
@@ -749,7 +837,7 @@ REASON_TEMPLATES = {
 Example structure: "The LV myocardium shows [uniform/heterogeneous] thickness. [Specific segment observations]. [Comparison across frames]. This pattern indicates [normal/thinned/thickened/bulging] characteristics." """,
 
     # Wall Motion Amplitude
-    ("Wall Motion Amplitude", "cine_4ch", True): """Your reason should include:
+    ("Wall Motion Amplitude", "cine_4ch", True, "reason"): """Your reason should include:
 1. **Motion magnitude**: Quantify the degree of inward wall motion during systole (normal, reduced, or absent)
 2. **Cavity size change**: Describe the change in LV cavity size from diastole to systole
 3. **Wall thickening**: Note whether there is appropriate wall thickening during systole
@@ -759,7 +847,7 @@ Example structure: "The LV myocardium shows [uniform/heterogeneous] thickness. [
 Example structure: "During systole, the LV walls show [extent] inward motion with [degree] reduction in cavity size. Wall thickening is [present/absent]. The motion amplitude is [normal/reduced/absent]." """,
 
     # Wall Motion Coordination
-    ("Wall Motion Coordination", "cine_4ch", False): """Your reason should include:
+    ("Wall Motion Coordination", "cine_4ch", False, "reason"): """Your reason should include:
 1. **Synchrony assessment**: Evaluate whether all LV wall segments move together in a coordinated manner
 2. **Regional analysis**: Examine each segment (septal, lateral, anterior, inferior) for synchronous motion
 3. **Timing comparison**: Compare the timing of contraction across different segments
@@ -769,7 +857,7 @@ Example structure: "During systole, the LV walls show [extent] inward motion wit
 Example structure: "The LV wall segments show [coordinated/uncoordinated] motion. [Specific segment observations]. [Timing analysis]. This indicates [coordinated/uncoordinated] wall motion." """,
 
     # Systolic Function
-    ("Systolic Function", "cine_4ch", False): """Your reason should include:
+    ("Systolic Function", "cine_4ch", False, "reason"): """Your reason should include:
 1. **Cavity size reduction**: Measure and describe the reduction in LV cavity size from diastole to systole
 2. **Wall thickening**: Assess the degree of wall thickening during systole
 3. **Ejection pattern**: Describe how the cavity changes shape and size (normal ejection vs. cavity obliteration)
@@ -779,7 +867,7 @@ Example structure: "The LV wall segments show [coordinated/uncoordinated] motion
 Example structure: "The LV cavity shows [extent] reduction in size during systole with [degree] wall thickening. The ejection pattern is [normal/cavity-obliterating]. Overall systolic function appears [normal/reduced]." """,
 
     # Mitral Regurgitation
-    ("Mitral Regurgitation", "cine_4ch", False): """Your reason should include:
+    ("Mitral Regurgitation", "cine_4ch", False, "reason"): """Your reason should include:
 1. **Systolic phase analysis**: Focus on ventricular systole when mitral regurgitation would be visible
 2. **Signal void detection**: Look for dark/turbulent signal voids (flow jets) extending from the mitral valve into the left atrium
 3. **Atrial cavity assessment**: Examine the left atrium for abnormal signal patterns during systole
@@ -789,7 +877,7 @@ Example structure: "The LV cavity shows [extent] reduction in size during systol
 Example structure: "During ventricular systole, [presence/absence] of signal void or turbulent jet is observed extending from the mitral valve into the left atrium. The left atrium shows [normal/abnormal] signal pattern. Valve coaptation appears [normal/abnormal]. This indicates [regurgitation present/absent]." """,
 
     # Tricuspid Regurgitation
-    ("Tricuspid Regurgitation", "cine_4ch", False): """Your reason should include:
+    ("Tricuspid Regurgitation", "cine_4ch", False, "reason"): """Your reason should include:
 1. **Systolic phase analysis**: Focus on ventricular systole when tricuspid regurgitation would be visible
 2. **Signal void detection**: Look for dark/turbulent signal voids (flow jets) extending from the tricuspid valve into the right atrium
 3. **Atrial cavity assessment**: Examine the right atrium for abnormal signal patterns during systole
@@ -799,7 +887,7 @@ Example structure: "During ventricular systole, [presence/absence] of signal voi
 Example structure: "During ventricular systole, [presence/absence] of signal void or turbulent jet is observed extending from the tricuspid valve into the right atrium. The right atrium shows [normal/abnormal] signal pattern. Valve coaptation appears [normal/abnormal]. This indicates [regurgitation present/absent]." """,
 
     # Aortic Regurgitation
-    ("Aortic Regurgitation", "cine_3ch", False): """Your reason should include:
+    ("Aortic Regurgitation", "cine_3ch", False, "reason"): """Your reason should include:
 1. **Diastolic phase analysis**: Focus on ventricular diastole when aortic regurgitation would be visible
 2. **Signal void detection**: Look for dark/turbulent signal voids (flow jets) extending from the aortic valve into the left ventricular outflow tract (LVOT)
 3. **LVOT assessment**: Examine the LVOT for abnormal signal patterns during diastole
@@ -809,7 +897,7 @@ Example structure: "During ventricular systole, [presence/absence] of signal voi
 Example structure: "During ventricular diastole, [presence/absence] of signal void or turbulent jet is observed extending from the aortic valve into the LVOT. The LVOT shows [normal/abnormal] signal pattern. Valve coaptation appears [normal/abnormal]. This indicates [regurgitation present/absent]." """,
 
     # Special Signs
-    ("Special Signs", "cine_3ch", True): """Your reason should include:
+    ("Special Signs", "cine_3ch", True, "reason"): """Your reason should include:
 1. **LVOT analysis**: Examine the left ventricular outflow tract for signs of obstruction (SAM sign, narrowing)
 2. **Aortic valve assessment**: Look for signs of aortic stenosis (high-velocity jets, turbulence)
 3. **LV shape evaluation**: Assess the left ventricular shape for characteristic signs (spade sign, etc.)
@@ -819,7 +907,7 @@ Example structure: "During ventricular diastole, [presence/absence] of signal vo
 Example structure: "The LVOT shows [normal/abnormal] configuration with [specific observations]. The aortic valve demonstrates [normal/abnormal] flow patterns. The LV shape exhibits [normal/characteristic abnormality]. [Specific sign identification]." """,
 
     # Pericardial Effusion
-    ("Pericardial Effusion", "cine_4ch", False): """Your reason should include:
+    ("Pericardial Effusion", "cine_4ch", False, "reason"): """Your reason should include:
 1. **Pericardial space assessment**: Examine the space between the heart and pericardium
 2. **Fluid signal detection**: Look for abnormal signal (bright or dark) indicating fluid accumulation
 3. **Location identification**: Note the specific location of any fluid (anterior, posterior, circumferential)
@@ -829,7 +917,7 @@ Example structure: "The LVOT shows [normal/abnormal] configuration with [specifi
 Example structure: "The pericardial space shows [normal/abnormal] appearance. [Presence/absence] of abnormal signal (bright or dark) is observed between the heart and pericardium. The location is [specific location]. The effusion thickness is [if present]. This indicates [effusion present/absent]." """,
 
     # Pleural Effusion
-    ("Pleural Effusion", "cine_4ch", False): """Your reason should include:
+    ("Pleural Effusion", "cine_4ch", False, "reason"): """Your reason should include:
 1. **Pleural space assessment**: Examine the pleural spaces (right and/or left) adjacent to the heart
 2. **Fluid signal detection**: Look for abnormal signal (bright or dark) indicating fluid accumulation in pleural spaces
 3. **Location identification**: Note which pleural space(s) show abnormalities (right, left, or both)
@@ -840,7 +928,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 
     # ==================== LGE Reason Templates ====================
     # Enhancement Status
-    ("Enhancement Status", "LGE_sax", False): """Your reason should include (image-based only):
+    ("Enhancement Status", "LGE_sax", False, "reason"): """Your reason should include (image-based only):
 1) Enhancement detection: whether any myocardium contains visually brighter foci compared with surrounding myocardium
 2) Contrast comparison: compare suspected regions against adjacent normal myocardium and blood pool (as reference only)
 3) Spatial consistency: confirm the bright area persists across adjacent frames/slices (if available), not a single-frame noise
@@ -848,7 +936,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Conclusion: state present vs absent""",
 
     # Abnormal Signal
-    ("Abnormal Signal", "LGE_sax", False): """Your reason should include (image-based only):
+    ("Abnormal Signal", "LGE_sax", False, "reason"): """Your reason should include (image-based only):
 1) Homogeneity: uniform bright vs heterogeneous (mixed bright/dark) within the suspected region
 2) Boundary/texture: smooth continuous bright area vs mottled/variegated appearance
 3) Frame consistency: pattern repeats across frames rather than appearing as isolated noise
@@ -856,7 +944,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Classification: high vs mixed""",
 
     # High Signal Abnormal Segment
-    ("High Signal Abnormal Segment", "LGE_4ch", True): """Your reason should include (image-based only):
+    ("High Signal Abnormal Segment", "LGE_4ch", True, "reason"): """Your reason should include (image-based only):
 1) Segment identification: which parts of LV long-axis are visible in this 4ch view
 2) Enhancement presence by segment: basal/mid/apical/apex
 3) Distribution along long axis: where it starts and ends
@@ -864,7 +952,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Final selected segments (or None)""",
 
     # High Signal Abnormal Region
-    ("High Signal Abnormal Region", "LGE_sax", True): """Your reason should include (image-based only):
+    ("High Signal Abnormal Region", "LGE_sax", True, "reason"): """Your reason should include (image-based only):
 1) Region mapping: locate the bright area around the LV circumference
 2) Comparison: abnormal region brighter than adjacent myocardium
 3) Extent: focal vs broad involvement around the ring
@@ -872,7 +960,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Selected wall regions (or None)""",
 
     # High Signal Distribution Pattern
-    ("High Signal Distribution Pattern", "LGE_sax", True): """Your reason should include (image-based only):
+    ("High Signal Distribution Pattern", "LGE_sax", True, "reason"): """Your reason should include (image-based only):
 1) Geometry: band-like vs scattered vs widespread
 2) Continuity: continuous vs discontinuous
 3) Size/number: few large foci vs many small foci
@@ -880,7 +968,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Selected pattern(s) (or None)""",
 
     # High Signal Myocardial Layer
-    ("High Signal Myocardial Layer", "LGE_sax", True): """Your reason should include (image-based only):
+    ("High Signal Myocardial Layer", "LGE_sax", True, "reason"): """Your reason should include (image-based only):
 1) Depth: where within the wall the brightness is located
 2) Border proximity: endocardial vs epicardial adjacency
 3) Thickness involvement: partial vs near full thickness
@@ -888,7 +976,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Selected layer(s) (or None)""",
 
     # Special Description
-    ("Special Description", "LGE_4ch", True): """Your reason should include (image-based only):
+    ("Special Description", "LGE_4ch", True, "reason"): """Your reason should include (image-based only):
 1) Pericardium: any visible bright line/thickening consistent across frames
 2) Septal insertion: focal bright signal at RV insertion areas (if visible)
 3) RV myocardium: any abnormal bright signal in RV wall (if visible)
@@ -896,7 +984,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Selected items or none""",
 
     # Low Signal Abnormal Region
-    ("Low Signal Abnormal Region", "LGE_sax", True): """Your reason should include (image-based only):
+    ("Low Signal Abnormal Region", "LGE_sax", True, "reason"): """Your reason should include (image-based only):
 1) Region mapping: where the low-signal (dark) area lies around the LV myocardium
 2) Comparison: explain how it is darker than adjacent myocardium (same slice/time)
 3) Myocardial confirmation: note that it is within the myocardial wall rather than the LV cavity
@@ -904,16 +992,43 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Selected wall regions (or None)""",
 
     # Low Signal Distribution Pattern
-    ("Low Signal Distribution Pattern", "LGE_sax", True): """Your reason should include (image-based only):
+    ("Low Signal Distribution Pattern", "LGE_sax", True, "reason"): """Your reason should include (image-based only):
 1) Geometry: band-like vs scattered vs widespread low-signal appearance
 2) Continuity: continuous vs discontinuous low-signal areas
 3) Size/number: few large dark foci vs many small dark foci
 4) Wall-thickness impression: partial vs near full-thickness low-signal (if assessable)
 5) Selected pattern(s) (or None)""",
 
+    # Low Signal Abnormal Segment
+    ("Low Signal Abnormal Segment", "LGE_sax", True, "reason"): """Your reason should include (image-based only):
+1) Segment identification: which slice levels correspond to basal/mid/apical/apex/apex in the provided frames
+2) Low-signal abnormality by level: where myocardium is persistently darker than adjacent myocardium
+3) Long-axis distribution: which levels are involved (start/end)
+4) Consistency: persists across adjacent frames/slices vs likely artifact
+5) Papillary muscle check: if low-signal is within papillary muscle structure (if visible)
+6) Selected segments (or None)""",
+
+    # Low Signal Myocardial Layer
+    ("Low Signal Myocardial Layer", "LGE_sax", True, "reason"): """Your reason should include (image-based only):
+1) Depth: where within the wall the low-signal (dark) area is located
+2) Border proximity: endocardial vs epicardial adjacency
+3) Thickness involvement: partial vs near full thickness
+4) Papillary muscle check: if low-signal is within papillary muscle structure (if visible)
+5) Consistency: persists across adjacent frames/slices vs likely artifact
+6) Selected layer(s) (or None)""",
+
+    # T2 Myocardial Layer
+    ("Myocardial Layer", "T2_sax", True, "reason"): """Your reason should include (image-based only):
+1) Depth: where within the wall the abnormal T2 signal (bright or dark) is located
+2) Border proximity: endocardial vs epicardial adjacency
+3) Thickness involvement: partial vs near full thickness
+4) Papillary muscle check: if abnormal signal is within papillary muscle structure (if visible)
+5) Consistency: persists across adjacent frames/slices
+6) Selected layer(s) (or None)""",
+
     # ==================== Perfusion Reason Templates ====================
     # Perfusion Status
-    ("Perfusion Status", "perfusion", False): """Your reason should include (image-based only):
+    ("Perfusion Status", "perfusion", False, "reason"): """Your reason should include (image-based only):
 1) Global vs regional: whether enhancement appears uniform across myocardium
 2) Temporal behavior: whether any region enhances later or less than others across frames
 3) Regional comparison: compare suspect region to remote myocardium within same frame/time point
@@ -921,7 +1036,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Conclusion: normal vs abnormal""",
 
     # Abnormal Regions
-    ("Abnormal Regions", "perfusion", True): """Your reason should include (image-based only):
+    ("Abnormal Regions", "perfusion", True, "reason"): """Your reason should include (image-based only):
 1) Mapping: where the region remains darker than others at the same time point
 2) Circumferential extent: focal vs broad along the LV ring
 3) Temporal persistence: persists across multiple frames rather than a single-frame artifact
@@ -929,7 +1044,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Selected regions (or None)""",
 
     # Perfusion Abnormality Signal Characteristics
-    ("Perfusion Abnormality Signal Characteristics", "perfusion", False): """Your reason should include (image-based only):
+    ("Perfusion Abnormality Signal Characteristics", "perfusion", False, "reason"): """Your reason should include (image-based only):
 1) Signal level: darker than remote myocardium vs near absent enhancement
 2) Timing: early dark then catch-up vs persistent dark
 3) Consistency: persists across frames
@@ -937,7 +1052,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Classification: reduced vs delayed vs defect""",
 
     # Myocardial Layer
-    ("Myocardial Layer", "perfusion", True): """Your reason should include (image-based only):
+    ("Myocardial Layer", "perfusion", True, "reason"): """Your reason should include (image-based only):
 1) Depth: where the dark/under-enhancing area lies within the wall
 2) Border proximity: endocardial vs epicardial adjacency
 3) Thickness: partial vs near full thickness
@@ -945,7 +1060,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Selected layer(s) (or None)""",
 
     # Abnormal Segments
-    ("Abnormal Segments", "perfusion", True): """Your reason should include (image-based only):
+    ("Abnormal Segments", "perfusion", True, "reason"): """Your reason should include (image-based only):
 1) Segment identification: which slice levels correspond to basal/mid/apical/apex in the provided frames
 2) Abnormal perfusion by level: where myocardium is persistently darker or enhances later than remote myocardium
 3) Long-axis distribution: which levels are involved (start/end)
@@ -954,7 +1069,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 
     # ==================== T2 Reason Templates ====================
     # T2 Signal
-    ("T2 Signal", "T2_sax", False): """Your reason should include (strictly visual):
+    ("T2 Signal", "T2_sax", False, "reason"): """Your reason should include (strictly visual):
 1) Overall brightness: myocardium compared with adjacent myocardium in other regions and blood pool (reference only)
 2) Uniformity: homogeneous vs heterogeneous appearance
 3) Regionality: localized bright/dark areas vs diffuse change
@@ -962,7 +1077,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Classification: normal/high/low/mixed""",
 
     # Abnormal Segments
-    ("Abnormal Segments", "T2_sax", True): """Your reason should include (image-based only):
+    ("Abnormal Segments", "T2_sax", True, "reason"): """Your reason should include (image-based only):
 1) Segment identification: basal/mid/apical/apex in the provided stack/frames
 2) Abnormal signal presence: where myocardium appears brighter/darker than elsewhere
 3) Long-axis distribution: which levels are involved
@@ -970,7 +1085,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Selected segments (or None)""",
 
     # Abnormal Regions
-    ("Abnormal Regions", "T2_sax", True): """Your reason should include (image-based only):
+    ("Abnormal Regions", "T2_sax", True, "reason"): """Your reason should include (image-based only):
 1) Region mapping: where the abnormal brightness/darkness is located around LV circumference
 2) Comparison: contrast versus adjacent normal myocardium
 3) Extent: focal vs broad involvement
@@ -978,7 +1093,7 @@ Example structure: "The pleural spaces show [normal/abnormal] appearance. [Prese
 5) Selected regions (or None)""",
 
     # Signal Distribution
-    ("Signal Distribution", "T2_sax", True): """Your reason should include (image-based only):
+    ("Signal Distribution", "T2_sax", True, "reason"): """Your reason should include (image-based only):
 1) Geometry: band-like vs scattered vs widespread
 2) Continuity: continuous vs discontinuous
 3) Size/number: few large foci vs many small foci
@@ -1087,7 +1202,7 @@ Answer:"""
         Returns:
             Reason template string if found, otherwise None
         """
-        key = (field, sequence_view, is_multiple_choice)
+        key = (field, sequence_view, is_multiple_choice, "reason")
         return REASON_TEMPLATES.get(key)
     
     @staticmethod
@@ -1149,12 +1264,43 @@ Answer:"""
             field_key = field
         
         # Find matching prompt
-        key = (field_key, sequence_view, is_multiple_choice)
+        key = (field_key, sequence_view, is_multiple_choice, "prompt")
         if key in prompt_dict:
             base_prompt = prompt_dict[key]
             
             # If reason needs to be included, modify prompt
             if include_reason:
+                # For CINE prompts, need to modify the "Do NOT output explanations" rule
+                if sequence_view in ["cine_sax", "cine_4ch", "cine_3ch"]:
+                    # Remove the "Do NOT output explanations, reasoning..." rule
+                    base_prompt = re.sub(
+                        r'- Do NOT output explanations, reasoning, descriptions, confidence, or any extra characters \(commas allowed\)\.\s*\n',
+                        '',
+                        base_prompt
+                    )
+                    # Add output format requirement for reason
+                    # Find the position after "Strict rules:" or before "Options:"
+                    if "Strict rules:" in base_prompt and "Options:" in base_prompt:
+                        # Insert reason format requirement before Options
+                        parts = base_prompt.split("Options:")
+                        if len(parts) == 2:
+                            # Check if output format is already specified
+                            if "Output format:" not in parts[0] and "Output MUST be" not in parts[0]:
+                                # Add output format requirement
+                                parts[0] += "\n\n- Output format:\n  - Line 1: Answer letter(s) only (e.g., A or A,B)\n  - Line 2: \"Reason: [your explanation]\""
+                            base_prompt = parts[0] + "\n\nOptions:" + parts[1]
+                    elif "Options:" in base_prompt:
+                        # Insert before Options
+                        parts = base_prompt.split("Options:")
+                        if len(parts) == 2:
+                            if "Output format:" not in parts[0]:
+                                parts[0] += "\n\n- Output format:\n  - Line 1: Answer letter(s) only (e.g., A or A,B)\n  - Line 2: \"Reason: [your explanation]\""
+                            base_prompt = parts[0] + "\n\nOptions:" + parts[1]
+                    else:
+                        # Append at the end
+                        if "Output format:" not in base_prompt:
+                            base_prompt += "\n\n- Output format:\n  - Line 1: Answer letter(s) only (e.g., A or A,B)\n  - Line 2: \"Reason: [your explanation]\""
+                
                 # Get reason template for this field
                 reason_template = TestModelPromptGenerator.get_reason_template(field_key, sequence_view, is_multiple_choice)
                 

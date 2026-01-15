@@ -12,6 +12,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 import argparse
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 try:
     from .prompt_manager import TestModelPromptGenerator, JudgeModelPromptGenerator
@@ -89,9 +91,34 @@ class BenchmarkDataLoader:
                 images = [images]
             
             # Build full image paths
+            # Try multiple path combinations to handle different directory structures
             full_image_paths = []
             for img_path in images:
+                # Try 1: Direct path (image_base_dir / img_path)
                 full_path = self.image_base_dir / img_path
+                
+                # Try 2: If path starts with patient_id, try nested structure
+                # (e.g., if img_path is "1322705/cine_sax_1/..." and base is "dataset/1322705",
+                #  try "dataset/1322705/1322705/cine_sax_1/...")
+                if not full_path.exists() and "/" in str(img_path):
+                    path_parts = str(img_path).split("/", 1)
+                    if len(path_parts) == 2:
+                        potential_patient_id = path_parts[0]
+                        rest_path = path_parts[1]
+                        # Try nested: base_dir / patient_id / rest_path
+                        nested_path = self.image_base_dir / potential_patient_id / rest_path
+                        if nested_path.exists():
+                            full_path = nested_path
+                
+                # Try 3: If still not found, try removing patient_id prefix
+                if not full_path.exists() and "/" in str(img_path):
+                    path_parts = str(img_path).split("/", 1)
+                    if len(path_parts) == 2 and path_parts[0].isdigit():
+                        # Remove patient_id prefix and try flat structure
+                        flat_path = self.image_base_dir / path_parts[1]
+                        if flat_path.exists():
+                            full_path = flat_path
+                
                 if full_path.exists():
                     full_image_paths.append(str(full_path))
                 else:
@@ -264,7 +291,8 @@ class BenchmarkEvaluator:
                  use_judge: bool = False,
                  include_reason: bool = True,
                  output_dir: Optional[str] = None,
-                 resume: bool = False):
+                 resume: bool = False,
+                 max_workers: int = 1):
         """
         Args:
             data_loader: Data loader
@@ -274,6 +302,7 @@ class BenchmarkEvaluator:
             include_reason: Whether to require model to output reasoning
             output_dir: Output directory for incremental saving
             resume: Whether to resume from existing results
+            max_workers: Maximum number of concurrent workers (default: 1, sequential)
         """
         self.data_loader = data_loader
         self.test_model = test_model
@@ -286,6 +315,8 @@ class BenchmarkEvaluator:
         self.output_dir = Path(output_dir) if output_dir else None
         self.resume = resume
         self.completed_qids = set()  # Track completed question IDs
+        self.max_workers = max_workers
+        self._save_lock = threading.Lock()  # Lock for thread-safe saving
         
     def _load_existing_results(self) -> Dict[str, Dict]:
         """Load existing results for resume functionality"""
@@ -308,31 +339,31 @@ class BenchmarkEvaluator:
             return {}
     
     def _save_single_result(self, result_item: Dict, all_results: List[Dict]):
-        """Save a single result incrementally"""
+        """Save a single result incrementally (thread-safe)"""
         if not self.output_dir:
             return
         
-        # Check if this result already exists (for resume mode)
-        existing_idx = None
-        for i, existing_item in enumerate(all_results):
-            if existing_item.get('qid') == result_item['qid']:
-                existing_idx = i
-                break
-        
-        if existing_idx is not None:
-            # Update existing result
-            all_results[existing_idx] = result_item
-        else:
-            # Add new result
-            all_results.append(result_item)
-        
-        # Save detailed results
-        detailed_file = self.output_dir / "detailed_results.json"
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        with open(detailed_file, 'w', encoding='utf-8') as f:
-            json.dump(all_results, f, ensure_ascii=False, indent=2)
-        
-        print(f"[Save] Saved result for QID: {result_item['qid']}")
+        with self._save_lock:
+            # Check if this result already exists (for resume mode)
+            existing_idx = None
+            for i, existing_item in enumerate(all_results):
+                if existing_item.get('qid') == result_item['qid']:
+                    existing_idx = i
+                    break
+            
+            if existing_idx is not None:
+                # Update existing result
+                all_results[existing_idx] = result_item
+            else:
+                # Add new result
+                all_results.append(result_item)
+            
+            # Save detailed results
+            detailed_file = self.output_dir / "detailed_results.json"
+            self.output_dir.mkdir(parents=True, exist_ok=True)
+            with open(detailed_file, 'w', encoding='utf-8') as f:
+                json.dump(all_results, f, ensure_ascii=False, indent=2)
+            
     
     def _update_summary(self, all_results: List[Dict]):
         """Update summary statistics from all results"""
@@ -491,7 +522,50 @@ class BenchmarkEvaluator:
             if is_multiple:
                 per_question_type[q_type]['hit'] += result.get('hit', 0.0)
         
-        # Iterate through all questions
+        # Process questions (sequential or concurrent)
+        if self.max_workers > 1:
+            # Concurrent processing
+            print(f"[Concurrent] Using {self.max_workers} workers for parallel processing")
+            detailed_results = self._evaluate_concurrent(questions, all_results, per_field, per_sequence_view, per_question_type)
+        else:
+            # Sequential processing (original behavior)
+            detailed_results = self._evaluate_sequential(questions, all_results, per_field, per_sequence_view, per_question_type)
+        
+        # Update statistics from new detailed_results (only count new results, not existing ones)
+        for result_item in detailed_results:
+            # Skip if this was already counted in existing results
+            if result_item['qid'] in existing_results:
+                continue
+                
+            is_correct = result_item.get('is_correct', False)
+            if is_correct and result_item.get('answer', '').strip():
+                correct += 1
+            
+            field = result_item.get('field', '')
+            seq_view = result_item.get('sequence_view', '')
+            q_type = result_item.get('question_type', '')
+            is_multiple = result_item.get('question_type') == 'Multiple Choice'
+            
+            per_field[field]['total'] += 1
+            per_field[field]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_field[field]['hit'] += result_item.get('hit', 0.0)
+            
+            per_sequence_view[seq_view]['total'] += 1
+            per_sequence_view[seq_view]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_sequence_view[seq_view]['hit'] += result_item.get('hit', 0.0)
+            
+            per_question_type[q_type]['total'] += 1
+            per_question_type[q_type]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_question_type[q_type]['hit'] += result_item.get('hit', 0.0)
+    
+    def _evaluate_sequential(self, questions: List[Question], all_results: List[Dict],
+                           per_field: Dict, per_sequence_view: Dict, per_question_type: Dict) -> List[Dict]:
+        """Sequential evaluation (original behavior)"""
+        detailed_results = []
+        
         for question in tqdm(questions, desc="Evaluating"):
             # Skip if already completed and resuming
             if question.qid in self.completed_qids:
@@ -511,9 +585,9 @@ class BenchmarkEvaluator:
             if self.include_reason:
                 print(f"[Prompt Check] include_reason=True, checking if prompt requires reason...")
                 if "Reason:" in test_prompt or "reason:" in test_prompt.lower():
-                    print(f"[Prompt Check] ✓ Prompt contains 'Reason:' requirement")
+                    print(f"[Prompt Check] Prompt contains 'Reason:' requirement")
                 else:
-                    print(f"[Prompt Check] ✗ WARNING: Prompt does NOT contain 'Reason:' requirement!")
+                    print(f"[Prompt Check] WARNING: Prompt does NOT contain 'Reason:' requirement!")
                     print(f"[Prompt Check] Prompt preview (last 200 chars): {test_prompt[-200:]}")
             
             # Model prediction
@@ -607,30 +681,12 @@ class BenchmarkEvaluator:
                 print(f"[Evaluation] Is correct: {is_correct}, Metrics: {metrics}")
             
             # Only count as correct if answer_text is not empty
-            if is_correct and answer_text and answer_text.strip():
-                correct += 1
-            elif is_correct and (not answer_text or not answer_text.strip()):
+            if is_correct and (not answer_text or not answer_text.strip()):
                 print(f"[Evaluation WARNING] QID {question.qid} marked as correct but answer is empty! Setting to incorrect.")
                 is_correct = False
                 metrics['accuracy'] = 0.0
                 if question.is_multiple_choice:
                     metrics['hit'] = 0.0
-            
-            # Statistics
-            per_field[question.field]['total'] += 1
-            per_field[question.field]['correct'] += (1 if is_correct else 0)
-            if question.is_multiple_choice:
-                per_field[question.field]['hit'] += metrics.get('hit', 0.0)
-            
-            per_sequence_view[question.sequence_view]['total'] += 1
-            per_sequence_view[question.sequence_view]['correct'] += (1 if is_correct else 0)
-            if question.is_multiple_choice:
-                per_sequence_view[question.sequence_view]['hit'] += metrics.get('hit', 0.0)
-            
-            per_question_type[question.question_type]['total'] += 1
-            per_question_type[question.question_type]['correct'] += (1 if is_correct else 0)
-            if question.is_multiple_choice:
-                per_question_type[question.question_type]['hit'] += metrics.get('hit', 0.0)
             
             # Detailed results (according to user requirements)
             # Ensure accuracy is consistent with is_correct
@@ -668,21 +724,271 @@ class BenchmarkEvaluator:
                 self._update_summary(all_results)
                 self.completed_qids.add(question.qid)
         
+        return detailed_results
+    
+    def _evaluate_concurrent(self, questions: List[Question], all_results: List[Dict],
+                            per_field: Dict, per_sequence_view: Dict, per_question_type: Dict) -> List[Dict]:
+        """Concurrent evaluation using ThreadPoolExecutor"""
+        detailed_results = []
+        completed_lock = threading.Lock()
+        
+        def process_question(question: Question) -> Optional[Dict]:
+            """Process a single question (worker function)"""
+            # Skip if already completed and resuming
+            with completed_lock:
+                if question.qid in self.completed_qids:
+                    return None
+            
+            try:
+                # Generate test model prompt
+                test_prompt = TestModelPromptGenerator.generate(
+                    sequence_view=question.sequence_view,
+                    question_type=question.question_type,
+                    is_multiple_choice=question.is_multiple_choice,
+                    question=question.question,
+                    field=question.field,
+                    include_reason=self.include_reason
+                )
+                
+                # Model prediction
+                try:
+                    raw_output = self.test_model.predict(question.images, test_prompt)
+                except Exception as e:
+                    print(f"[{question.qid}] ERROR: {type(e).__name__}: {e}")
+                    raw_output = ""
+                    answer_text = ""
+                    reason = ""
+                else:
+                    # Parse answer and reasoning
+                    answer_text, reason = self.answer_parser.parse_answer_with_reason(raw_output)
+                    if not answer_text:
+                        answer_text = raw_output
+                
+                # Evaluate answer
+                if self.use_judge and self.judge_model:
+                    # Use judge model for evaluation
+                    judge_prompt = JudgeModelPromptGenerator.generate(
+                        sequence_view=question.sequence_view,
+                        question_type=question.question_type,
+                        is_multiple_choice=question.is_multiple_choice,
+                        question=question.question,
+                        ground_truth=question.ground_truth,
+                        predicted_answer=answer_text
+                    )
+                    
+                    try:
+                        judge_output = self.judge_model.predict([], judge_prompt)
+                        judgment = self._parse_judge_output(judge_output)
+                        is_correct = judgment.get('is_correct', False)
+                        if question.is_multiple_choice:
+                            predicted_answers = self.answer_extractor.extract_answers(answer_text, question.is_multiple_choice)
+                            gt_answers = self.answer_extractor.parse_ground_truth(question.ground_truth)
+                            pred_set = set([p[0] if len(p) > 0 else '' for p in predicted_answers])
+                            gt_set = set(gt_answers)
+                            intersection = pred_set & gt_set
+                            hit = 1.0 if len(intersection) > 0 else 0.0
+                            metrics = {'accuracy': 1.0 if is_correct else 0.0, 'hit': hit}
+                        else:
+                            metrics = {'accuracy': 1.0 if is_correct else 0.0}
+                    except Exception as e:
+                        print(f"[{question.qid}] Judge error: {e}, falling back to rule-based")
+                        predicted_answers = self.answer_extractor.extract_answers(answer_text, question.is_multiple_choice)
+                        gt_answers = self.answer_extractor.parse_ground_truth(question.ground_truth)
+                        is_correct, metrics = self.evaluator.evaluate(predicted_answers, gt_answers, question.is_multiple_choice)
+                else:
+                    # Use rule-based evaluation
+                    predicted_answers = self.answer_extractor.extract_answers(answer_text, question.is_multiple_choice)
+                    gt_answers = self.answer_extractor.parse_ground_truth(question.ground_truth)
+                    is_correct, metrics = self.evaluator.evaluate(predicted_answers, gt_answers, question.is_multiple_choice)
+                
+                # Only count as correct if answer_text is not empty
+                if is_correct and (not answer_text or not answer_text.strip()):
+                    is_correct = False
+                    metrics['accuracy'] = 0.0
+                    if question.is_multiple_choice:
+                        metrics['hit'] = 0.0
+                
+                # Ensure accuracy is consistent with is_correct
+                accuracy = metrics.get('accuracy', 1.0 if is_correct else 0.0)
+                if is_correct and accuracy != 1.0:
+                    accuracy = 1.0
+                elif not is_correct and accuracy != 0.0:
+                    accuracy = 0.0
+                
+                result_item = {
+                    'qid': question.qid,
+                    'field': question.field,
+                    'patient_id': question.patient_id,
+                    'question_type': question.question_type,
+                    'sequence_view': question.sequence_view,
+                    'original_nii': question.original_nii,
+                    'gt': question.ground_truth,
+                    'answer': answer_text,
+                    'reason': reason,
+                    'is_correct': is_correct,
+                    'accuracy': accuracy,
+                    'raw_output': raw_output
+                }
+                
+                if question.is_multiple_choice:
+                    result_item['hit'] = metrics.get('hit', 0.0)
+                
+                # Incremental save: save each result immediately
+                if self.output_dir:
+                    self._save_single_result(result_item, all_results)
+                    self._update_summary(all_results)
+                    with completed_lock:
+                        self.completed_qids.add(question.qid)
+                
+                return result_item
+                
+            except Exception as e:
+                print(f"[{question.qid}] Exception: {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
+                return None
+        
+        # Filter out already completed questions
+        questions_to_process = [q for q in questions if q.qid not in self.completed_qids]
+        
+        # Process questions concurrently
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            future_to_question = {executor.submit(process_question, q): q for q in questions_to_process}
+            
+            for future in tqdm(as_completed(future_to_question), total=len(questions_to_process), desc="Evaluating"):
+                question = future_to_question[future]
+                try:
+                    result_item = future.result()
+                    if result_item:
+                        detailed_results.append(result_item)
+                except Exception as e:
+                    print(f"[{question.qid}] Future exception: {e}")
+        
         # Merge all_results with detailed_results (in case of resume)
-        # Use all_results as the source of truth since it includes existing results
         if self.resume and self.output_dir:
-            # Create a map of new results by qid
             new_results_map = {item['qid']: item for item in detailed_results}
-            # Update all_results with new results
             for i, existing_item in enumerate(all_results):
                 if existing_item['qid'] in new_results_map:
                     all_results[i] = new_results_map[existing_item['qid']]
-            # Add any completely new results
             for new_item in detailed_results:
                 if new_item['qid'] not in {item['qid'] for item in all_results}:
                     all_results.append(new_item)
-            # Use all_results as the final detailed_results
             detailed_results = all_results
+        
+        return detailed_results
+    
+    def evaluate(self, questions: Optional[List[Question]] = None) -> EvaluationResult:
+        """
+        Execute evaluation
+        
+        Args:
+            questions: List of questions, if None then load from data_loader
+            
+        Returns:
+            Evaluation result
+        """
+        if questions is None:
+            questions = self.data_loader.load_questions()
+        
+        # Load existing results if resuming
+        existing_results = {}
+        all_results = []
+        if self.resume and self.output_dir:
+            existing_results = self._load_existing_results()
+            all_results = list(existing_results.values())
+            self.completed_qids = set(existing_results.keys())
+            print(f"[Resume] Found {len(self.completed_qids)} completed questions, will skip them")
+        
+        # Statistics containers
+        total = len(questions)
+        def _get_is_correct(result):
+            is_correct_raw = result.get('is_correct', False)
+            if isinstance(is_correct_raw, list) and len(is_correct_raw) > 0:
+                return bool(is_correct_raw[0])
+            elif isinstance(is_correct_raw, tuple):
+                return bool(is_correct_raw[0])
+            else:
+                return bool(is_correct_raw)
+        correct = sum(1 for r in all_results if _get_is_correct(r))
+        per_field = defaultdict(lambda: {'total': 0, 'correct': 0, 'hit': 0})
+        per_sequence_view = defaultdict(lambda: {'total': 0, 'correct': 0, 'hit': 0})
+        per_question_type = defaultdict(lambda: {'total': 0, 'correct': 0, 'hit': 0})
+        
+        # Initialize statistics from existing results
+        for result in all_results:
+            field = result.get('field', '')
+            seq_view = result.get('sequence_view', '')
+            q_type = result.get('question_type', '')
+            
+            is_correct_raw = result.get('is_correct', False)
+            if isinstance(is_correct_raw, list) and len(is_correct_raw) > 0:
+                is_correct = is_correct_raw[0] if isinstance(is_correct_raw[0], bool) else False
+                if len(is_correct_raw) > 1 and isinstance(is_correct_raw[1], dict):
+                    result['accuracy'] = is_correct_raw[1].get('accuracy', 0.0)
+                result['is_correct'] = is_correct
+            elif isinstance(is_correct_raw, tuple):
+                is_correct = is_correct_raw[0] if isinstance(is_correct_raw[0], bool) else False
+                result['is_correct'] = is_correct
+            else:
+                is_correct = bool(is_correct_raw)
+            
+            accuracy = result.get('accuracy', 0.0)
+            if is_correct and accuracy == 0.0:
+                result['accuracy'] = 1.0
+            elif not is_correct and accuracy == 1.0:
+                result['accuracy'] = 0.0
+            
+            is_multiple = result.get('question_type') == 'Multiple Choice'
+            
+            per_field[field]['total'] += 1
+            per_field[field]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_field[field]['hit'] += result.get('hit', 0.0)
+            
+            per_sequence_view[seq_view]['total'] += 1
+            per_sequence_view[seq_view]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_sequence_view[seq_view]['hit'] += result.get('hit', 0.0)
+            
+            per_question_type[q_type]['total'] += 1
+            per_question_type[q_type]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_question_type[q_type]['hit'] += result.get('hit', 0.0)
+        
+        # Process questions (sequential or concurrent)
+        if self.max_workers > 1:
+            # Concurrent processing
+            print(f"[Concurrent] Using {self.max_workers} workers for parallel processing")
+            detailed_results = self._evaluate_concurrent(questions, all_results, per_field, per_sequence_view, per_question_type)
+        else:
+            # Sequential processing (original behavior)
+            detailed_results = self._evaluate_sequential(questions, all_results, per_field, per_sequence_view, per_question_type)
+        
+        # Update statistics from detailed_results
+        for result_item in detailed_results:
+            is_correct = result_item.get('is_correct', False)
+            if is_correct and result_item.get('answer', '').strip():
+                correct += 1
+            
+            field = result_item.get('field', '')
+            seq_view = result_item.get('sequence_view', '')
+            q_type = result_item.get('question_type', '')
+            is_multiple = result_item.get('question_type') == 'Multiple Choice'
+            
+            per_field[field]['total'] += 1
+            per_field[field]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_field[field]['hit'] += result_item.get('hit', 0.0)
+            
+            per_sequence_view[seq_view]['total'] += 1
+            per_sequence_view[seq_view]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_sequence_view[seq_view]['hit'] += result_item.get('hit', 0.0)
+            
+            per_question_type[q_type]['total'] += 1
+            per_question_type[q_type]['correct'] += (1 if is_correct else 0)
+            if is_multiple:
+                per_question_type[q_type]['hit'] += result_item.get('hit', 0.0)
         
         # Calculate average metrics
         for key in per_field:
@@ -907,6 +1213,8 @@ def main():
                        help='Filter questions by sequence_view (e.g., "cine" to test only cine sequences, "LGE" for LGE sequences)')
     parser.add_argument('--resume', action='store_true',
                        help='Resume evaluation from existing results (skip already completed questions)')
+    parser.add_argument('--max_workers', type=int, default=1,
+                       help='Maximum number of concurrent workers for parallel processing (default: 1, sequential)')
     
     args = parser.parse_args()
     
@@ -982,7 +1290,8 @@ def main():
         test_model, 
         judge_model=judge_model,
         use_judge=args.use_judge,
-        include_reason=args.include_reason
+        include_reason=args.include_reason,
+        max_workers=args.max_workers
     )
     
     # Determine output directory
